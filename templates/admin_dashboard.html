@@ -1,0 +1,978 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Smart Attendance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4e73df;
+            --success: #1cc88a;
+            --info: #36b9cc;
+            --warning: #f6c23e;
+            --danger: #e74a3b;
+            --dark: #5a5c69;
+            --sidebar: linear-gradient(180deg, #4e73df 10%, #000000 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #010613;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            height: 100vh;
+            background: var(--sidebar);
+            z-index: 100;
+            transition: all 0.3s;
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem;
+            text-align: center;
+            color: rgb(255, 255, 255);
+            font-size: 1.3rem;
+            font-weight: 700;
+            border-bottom: 1px solid rgb(48, 10, 10);
+        }
+
+        .nav-item {
+            position: relative;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            color: rgb(255, 255, 255);
+            background: rgba(36, 9, 9, 0.26);
+        }
+
+        .nav-link.active {
+            color: white;
+            font-weight: 700;
+        }
+
+        .nav-link i {
+            margin-right: 0.5rem;
+            width: 20px;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 0;
+        }
+
+        .topbar {
+            background: rgb(255, 255, 255);
+            padding: 1rem 1.5rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+        }
+
+        .stats-card {
+            background: white;
+            border-radius: 0.35rem;
+            padding: 1.25rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            border-left: 4px solid;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stats-card.primary {
+            border-left-color: var(--primary);
+        }
+
+        .stats-card.success {
+            border-left-color: var(--success);
+        }
+
+        .stats-card.warning {
+            border-left-color: var(--warning);
+        }
+
+        .stats-card.info {
+            border-left-color: var(--info);
+        }
+
+        .stats-icon {
+            font-size: 2rem;
+            opacity: 0.3;
+        }
+
+        .stats-card.primary .stats-icon {
+            color: var(--primary);
+        }
+
+        .stats-card.success .stats-icon {
+            color: var(--success);
+        }
+
+        .stats-card.warning .stats-icon {
+            color: var(--warning);
+        }
+
+        .stats-card.info .stats-icon {
+            color: var(--info);
+        }
+
+        .data-card {
+            background: white;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            margin-bottom: 1.5rem;
+        }
+
+        .data-card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #e3e6f0;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .data-card-body {
+            padding: 1.25rem;
+        }
+
+        .video-container {
+            position: relative;
+            width: 100%;
+            height: 450px;
+            background: #000;
+            border-radius: 0.35rem;
+            overflow: hidden;
+        }
+
+        .video-stream {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 0.25rem;
+            font-size: 0.9rem;
+        }
+
+        .live-indicator {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: #ff0000;
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
+        }
+
+        .badge-notification {
+            position: absolute;
+            top: 8px;
+            right: 8px;
+            background: var(--danger);
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            font-size: 11px;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .badge-notification.show {
+            display: flex;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            border-radius: 0.35rem;
+            max-width: 900px;
+            width: 90%;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .modal-header {
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid #e3e6f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-body {
+            padding: 1.5rem;
+        }
+
+        .request-item {
+            border: 1px solid #e3e6f0;
+            border-radius: 0.35rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .btn {
+            border-radius: 0.35rem;
+            padding: 0.5rem 1rem;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-success {
+            background: var(--success);
+            color: white;
+        }
+
+        .btn-danger {
+            background: var(--danger);
+            color: white;
+        }
+
+        .btn-warning {
+            background: var(--warning);
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #858796;
+            color: white;
+        }
+
+        .btn-sm {
+            padding: 0.25rem 0.75rem;
+            font-size: 0.875rem;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            background: #f8f9fc;
+            padding: 0.75rem;
+            text-align: left;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+        }
+
+        .table td {
+            padding: 0.75rem;
+            border-top: 1px solid #e3e6f0;
+        }
+
+        .badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 0.35rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-success {
+            background: rgba(28, 200, 138, 0.1);
+            color: var(--success);
+        }
+
+        .badge-danger {
+            background: rgba(231, 74, 59, 0.1);
+            color: var(--danger);
+        }
+
+        .badge-warning {
+            background: rgba(246, 194, 62, 0.1);
+            color: var(--warning);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: -250px;
+            }
+
+            .sidebar.active {
+                margin-left: 0;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-user-shield"></i> Admin Panel
+        </div>
+        <ul class="nav flex-column" style="list-style: none;">
+            <li class="nav-item">
+                <a class="nav-link active" href="/admin/dashboard">
+                    <i class="fas fa-fw fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/reg">
+                    <i class="fas fa-fw fa-user-plus"></i>
+                    <span>Enroll User</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="#" onclick="showRequestsModal(); return false;" style="position: relative;">
+                    <i class="fas fa-fw fa-bell"></i>
+                    <span>Requests</span>
+                    <span id="requestBadge" class="badge-notification">0</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/admin/profile">
+                    <i class="fas fa-fw fa-user"></i>
+                    <span>Profile</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/logout">
+                    <i class="fas fa-fw fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <nav class="topbar">
+            <button class="btn btn-secondary" id="sidebarToggle" style="display: none;">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h4 style="margin: 0; color: var(--dark);">Dashboard</h4>
+            <div class="user-info">
+                <div>
+                    <div style="font-weight: 600;">{{ admin.name }}</div>
+                    <small style="color: #858796;">Administrator</small>
+                </div>
+                <div class="user-avatar">
+                    {% if admin.profile_image %}
+                    <img src="data:image/jpeg;base64,{{ admin.profile_image }}"
+                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                    {% else %}
+                    {{ admin.name[0].upper() }}
+                    {% endif %}
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <div class="container-fluid" style="padding: 1.5rem;">
+            <!-- Stats Cards -->
+            <div class="row mb-4">
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="stats-card primary">
+                        <div>
+                            <div
+                                style="color: var(--primary); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                                Total Users</div>
+                            <div style="font-size: 1.5rem; font-weight: 700;" id="totalUsers">0</div>
+                        </div>
+                        <div class="stats-icon"><i class="fas fa-users"></i></div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="stats-card success">
+                        <div>
+                            <div
+                                style="color: var(--success); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                                Today's Attendance</div>
+                            <div style="font-size: 1.5rem; font-weight: 700;" id="todayAttendance">0</div>
+                        </div>
+                        <div class="stats-icon"><i class="fas fa-check-circle"></i></div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="stats-card info">
+                        <div>
+                            <div
+                                style="color: var(--info); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                                Blocked Users</div>
+                            <div style="font-size: 1.5rem; font-weight: 700;" id="blockedUsers">0</div>
+                        </div>
+                        <div class="stats-icon"><i class="fas fa-ban"></i></div>
+                    </div>
+                </div>
+                <div class="col-xl-3 col-md-6 mb-4">
+                    <div class="stats-card warning">
+                        <div>
+                            <div
+                                style="color: var(--warning); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                                Pending Requests</div>
+                            <div style="font-size: 1.5rem; font-weight: 700;" id="pendingRequests">0</div>
+                        </div>
+                        <div class="stats-icon"><i class="fas fa-clock"></i></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Main Content Row -->
+            <div class="row">
+                <!-- Live Camera Feed -->
+                <div class="col-xl-8 mb-4">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <i class="fas fa-video"></i> Live Camera Feed
+                        </div>
+                        <div class="data-card-body">
+                            <div class="video-container">
+                                <img class="video-stream" src="/video_feed" alt="Camera Feed">
+                                <div class="video-overlay">
+                                    <span class="live-indicator"></span>
+                                    LIVE
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recent Attendance -->
+                <div class="col-xl-4 mb-4">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <i class="fas fa-clock"></i> Recent Attendance
+                        </div>
+                        <div class="data-card-body" style="max-height: 500px; overflow-y: auto;" id="attendanceList">
+                            <div style="text-align: center; color: #858796; padding: 2rem;">Loading...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Users Table -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <i class="fas fa-users"></i> Enrolled Users
+                        </div>
+                        <div class="data-card-body">
+                            <div class="table-responsive" id="usersTable">
+                                <div style="text-align: center; padding: 2rem;">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Chart -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <i class="fas fa-chart-line"></i> Attendance Trend (30 Days)
+                        </div>
+                        <div class="data-card-body">
+                            <canvas id="attendanceChart" style="max-height: 300px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Enrollment Requests Modal -->
+    <div id="requestsModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 style="margin: 0;"><i class="fas fa-bell"></i> Enrollment Requests</h5>
+                <button class="btn btn-secondary btn-sm" onclick="closeRequestsModal()">×</button>
+            </div>
+            <div class="modal-body" id="requestsList">
+                <div style="text-align: center; padding: 2rem;">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let attendanceChart = null;
+
+        async function initDashboard() {
+            await loadStats();
+            await loadRecentAttendance();
+            await loadUsers();
+            await loadAttendanceChart();
+            await loadPendingRequests();
+
+            setInterval(loadRecentAttendance, 10000);
+            setInterval(loadStats, 30000);
+            setInterval(loadPendingRequests, 30000);
+        }
+
+        async function loadStats() {
+            try {
+                const usersRes = await fetch('/list_users');
+                const users = await usersRes.json();
+                document.getElementById('totalUsers').textContent = users.length;
+
+                const blocked = users.filter(u => u.status === 'blocked').length;
+                document.getElementById('blockedUsers').textContent = blocked;
+
+                const attendanceRes = await fetch('/api/attendance_recent');
+                const attendance = await attendanceRes.json();
+
+                const today = new Date().toISOString().split('T')[0];
+                const todayRecords = new Set(attendance.filter(r => r.timestamp.startsWith(today)).map(r => r.name));
+                document.getElementById('todayAttendance').textContent = todayRecords.size;
+
+                const countRes = await fetch('/api/pending_requests_count');
+                const countData = await countRes.json();
+                document.getElementById('pendingRequests').textContent = countData.count;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadRecentAttendance() {
+            try {
+                const res = await fetch('/api/attendance_recent');
+                const records = await res.json();
+
+                const listEl = document.getElementById('attendanceList');
+
+                if (records.length === 0) {
+                    listEl.innerHTML = '<div style="text-align: center; color: #858796; padding: 2rem;">No records yet</div>';
+                    return;
+                }
+
+                listEl.innerHTML = records.slice(0, 20).map(r => {
+                    const time = new Date(r.timestamp);
+                    const timeStr = time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    const conf = Math.round(r.confidence * 100);
+
+                    return `
+                        <div style="padding: 0.75rem; border-bottom: 1px solid #e3e6f0; display: flex; justify-content: space-between; align-items: center;">
+                            <div>
+                                <div style="font-weight: 600;">${r.name}</div>
+                                <div style="font-size: 0.85rem; color: #858796;">${timeStr}</div>
+                            </div>
+                            <span class="badge badge-success">${conf}%</span>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading attendance:', error);
+            }
+        }
+
+        async function loadUsers() {
+            try {
+                const res = await fetch('/list_users');
+                const users = await res.json();
+
+                const tableEl = document.getElementById('usersTable');
+
+                if (users.length === 0) {
+                    tableEl.innerHTML = '<div style="text-align: center; padding: 2rem;">No users enrolled yet</div>';
+                    return;
+                }
+
+                tableEl.innerHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Photos</th>
+                                <th>Enrolled</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${users.map(u => {
+                    const date = u.enrollment_date ? new Date(u.enrollment_date).toLocaleDateString() : 'N/A';
+                    const status = u.status || 'active';
+                    const statusBadge = status === 'active' ? 'badge-success' : 'badge-danger';
+                    const actionBtn = status === 'active' ?
+                        `<button class="btn btn-danger btn-sm" onclick="blockUser('${u.name}')">Block</button>` :
+                        `<button class="btn btn-success btn-sm" onclick="unblockUser('${u.name}')">Unblock</button>`;
+
+                    return `
+                                    <tr>
+                                        <td style="font-weight: 600;">${u.name}</td>
+                                        <td>${u.photos_count || 0}</td>
+                                        <td>${date}</td>
+                                        <td><span class="badge ${statusBadge}">${status.toUpperCase()}</span></td>
+                                        <td>${actionBtn}</td>
+                                    </tr>
+                                `;
+                }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (error) {
+                console.error('Error loading users:', error);
+            }
+        }
+
+        async function loadAttendanceChart() {
+            try {
+                const res = await fetch('/api/attendance_stats?days=30');
+                const data = await res.json();
+
+                const ctx = document.getElementById('attendanceChart').getContext('2d');
+
+                if (attendanceChart) {
+                    attendanceChart.destroy();
+                }
+
+                attendanceChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.labels,
+                        datasets: [{
+                            label: 'Daily Attendance',
+                            data: data.values,
+                            borderColor: '#4e73df',
+                            backgroundColor: 'rgba(78, 115, 223, 0.1)',
+                            tension: 0.4,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: { beginAtZero: true }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading chart:', error);
+            }
+        }
+
+        async function loadPendingRequests() {
+            try {
+                const countRes = await fetch('/api/pending_requests_count');
+                const countData = await countRes.json();
+
+                const badge = document.getElementById('requestBadge');
+                if (countData.count > 0) {
+                    badge.textContent = countData.count;
+                    badge.classList.add('show');
+                } else {
+                    badge.classList.remove('show');
+                }
+            } catch (error) {
+                console.error('Error loading pending requests:', error);
+            }
+        }
+
+        async function showRequestsModal() {
+            const modal = document.getElementById('requestsModal');
+            modal.classList.add('show');
+
+            try {
+                const res = await fetch('/api/enrollment_requests');
+                const requests = await res.json();
+
+                const listEl = document.getElementById('requestsList');
+
+                if (requests.length === 0) {
+                    listEl.innerHTML = '<div style="text-align: center; padding: 2rem;">No pending requests</div>';
+                    return;
+                }
+
+                listEl.innerHTML = requests.map(req => {
+                    const date = new Date(req.submitted_at).toLocaleString();
+                    return `
+                        <div class="request-item">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 0.5rem;">
+                                <div style="font-weight: 700; font-size: 1.1rem;">${req.name}</div>
+                                <small style="color: #858796;">${date}</small>
+                            </div>
+                            <div style="color: #5a5c69; margin-bottom: 0.5rem;">
+                                <div><i class="fas fa-envelope"></i> ${req.email}</div>
+                                <div><i class="fas fa-phone"></i> ${req.phone || 'N/A'}</div>
+                            </div>
+                            <div style="display: flex; gap: 0.5rem;">
+                                <button class="btn btn-success btn-sm" onclick="approveRequest('${req._id}', '${req.name}')">
+                                    <i class="fas fa-check"></i> Approve
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="rejectRequest('${req._id}')">
+                                    <i class="fas fa-times"></i> Reject
+                                </button>
+                                <button class="btn btn-secondary btn-sm" onclick="viewRequestDetails('${req._id}')">
+                                    <i class="fas fa-images"></i> View Photos
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading requests:', error);
+            }
+        }
+
+        function closeRequestsModal() {
+            document.getElementById('requestsModal').classList.remove('show');
+        }
+
+        document.getElementById('requestsModal').addEventListener('click', function (e) {
+            if (e.target === this) closeRequestsModal();
+        });
+
+        async function viewRequestDetails(requestId) {
+            try {
+                const res = await fetch(`/api/enrollment_request/${requestId}`);
+                const req = await res.json();
+
+                if (req.error) {
+                    alert('Error loading request details');
+                    return;
+                }
+
+                const imageModal = document.createElement('div');
+                imageModal.className = 'modal show';
+                imageModal.innerHTML = `
+                    <div class="modal-content">
+                        <div class="modal-header">
+                            <h5 style="margin: 0;">Photos for ${req.name}</h5>
+                            <button class="btn btn-secondary btn-sm" onclick="this.closest('.modal').remove()">×</button>
+                        </div>
+                        <div class="modal-body">
+                            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 1rem;">
+                                ${req.images.map((img, idx) => `
+                                    <img src="data:image/jpeg;base64,${img}" style="width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 0.35rem; border: 1px solid #e3e6f0;" alt="Photo ${idx + 1}">
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                `;
+                document.body.appendChild(imageModal);
+
+                imageModal.addEventListener('click', function (e) {
+                    if (e.target === this) this.remove();
+                });
+            } catch (error) {
+                console.error('Error viewing request:', error);
+                alert('Error loading request details');
+            }
+        }
+
+        async function approveRequest(requestId, name) {
+            const department = prompt(`Approve enrollment for ${name}. Enter department (optional):`);
+            if (department === null) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('department', department);
+
+                const res = await fetch(`/api/approve_enrollment/${requestId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    alert(`✅ ${data.msg}`);
+                    await showRequestsModal();
+                    await loadStats();
+                    await loadUsers();
+                    await loadPendingRequests();
+                } else {
+                    alert(`❌ ${data.msg}`);
+                }
+            } catch (error) {
+                console.error('Error approving request:', error);
+                alert('Error approving request');
+            }
+        }
+
+        async function rejectRequest(requestId) {
+            const reason = prompt('Reason for rejection (optional):');
+            if (reason === null) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('reason', reason || 'Not specified');
+
+                const res = await fetch(`/api/reject_enrollment/${requestId}`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    alert('Request rejected');
+                    await showRequestsModal();
+                    await loadPendingRequests();
+                } else {
+                    alert(`Error: ${data.msg}`);
+                }
+            } catch (error) {
+                console.error('Error rejecting request:', error);
+                alert('Error rejecting request');
+            }
+        }
+
+        async function blockUser(name) {
+            if (!confirm(`Block ${name}? They will not be able to mark attendance.`)) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('name', name);
+
+                const res = await fetch('/api/block_user', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    alert(`✅ ${data.msg}`);
+                    await loadUsers();
+                    await loadStats();
+                } else {
+                    alert(`❌ ${data.msg}`);
+                }
+            } catch (error) {
+                console.error('Error blocking user:', error);
+                alert('Error blocking user');
+            }
+        }
+
+        async function unblockUser(name) {
+            if (!confirm(`Unblock ${name}?`)) return;
+
+            try {
+                const formData = new FormData();
+                formData.append('name', name);
+
+                const res = await fetch('/api/unblock_user', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    alert(`✅ ${data.msg}`);
+                    await loadUsers();
+                    await loadStats();
+                } else {
+                    alert(`❌ ${data.msg}`);
+                }
+            } catch (error) {
+                console.error('Error unblocking user:', error);
+                alert('Error unblocking user');
+            }
+        }
+
+        // Sidebar toggle for mobile
+        document.getElementById('sidebarToggle').addEventListener('click', function () {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', initDashboard);
+
+        window.showRequestsModal = showRequestsModal;
+        window.closeRequestsModal = closeRequestsModal;
+        window.viewRequestDetails = viewRequestDetails;
+        window.approveRequest = approveRequest;
+        window.rejectRequest = rejectRequest;
+        window.blockUser = blockUser;
+        window.unblockUser = unblockUser;
+    </script>
+</body>
+
+</html>

@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - Smart Attendance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #4e73df;
+            --success: #1cc88a;
+            --sidebar: linear-gradient(180deg, #1cc88a 10%, #13855c 100%);
+        }
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: #f8f9fc;
+            margin: 0;
+        }
+
+        .sidebar {
+            position: fixed;
+            width: 250px;
+            height: 100vh;
+            background: var(--sidebar);
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem;
+            text-align: center;
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-link.active {
+            color: white;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-link i {
+            margin-right: 0.5rem;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 0;
+        }
+
+        .topbar {
+            background: white;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+        }
+
+        .profile-card {
+            background: white;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            padding: 2rem;
+            max-width: 800px;
+            margin: 2rem auto;
+        }
+
+        .profile-avatar {
+            width: 150px;
+            height: 150px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--success);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 3rem;
+            font-weight: 700;
+            margin: 0 auto 1.5rem;
+        }
+
+        .info-card {
+            background: #f8f9fc;
+            border-radius: 0.35rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .info-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 0.75rem 0;
+            border-bottom: 1px solid #e3e6f0;
+        }
+
+        .info-item:last-child {
+            border-bottom: none;
+        }
+
+        .info-label {
+            font-weight: 600;
+            color: #5a5c69;
+        }
+
+        .info-value {
+            color: #858796;
+        }
+
+        .form-label {
+            font-weight: 600;
+            color: #5a5c69;
+            margin-bottom: 0.5rem;
+        }
+
+        .form-control {
+            border-radius: 0.35rem;
+            border: 1px solid #d1d3e2;
+            padding: 0.75rem;
+        }
+
+        .form-control:focus {
+            border-color: var(--success);
+            box-shadow: 0 0 0 0.2rem rgba(28, 200, 138, 0.25);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 0.35rem;
+            font-weight: 600;
+        }
+
+        .btn-success {
+            background: var(--success);
+            border: none;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #858796;
+            border: none;
+            color: white;
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-user"></i> User Panel
+        </div>
+        <ul class="nav flex-column" style="list-style: none;">
+            <li class="nav-item">
+                <a class="nav-link" href="/user/dashboard">
+                    <i class="fas fa-fw fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link active" href="/user/profile">
+                    <i class="fas fa-fw fa-user"></i>
+                    <span>Profile</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/logout">
+                    <i class="fas fa-fw fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <nav class="topbar">
+            <h4 style="margin: 0; color: #5a5c69;">My Profile</h4>
+        </nav>
+
+        <div class="profile-card">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, msg in messages %}
+            <div class="alert alert-{{ 'success' if category == 'success' else 'danger' }}" role="alert">
+                {{ msg }}
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <div class="text-center mb-4">
+                <div class="profile-avatar">
+                    {% if profile and profile.profile_image %}
+                    <img src="data:image/jpeg;base64,{{ profile.profile_image }}"
+                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                    {% else %}
+                    {{ user.name[0].upper() }}
+                    {% endif %}
+                </div>
+                <h3 style="font-weight: 700; color: #5a5c69;">{{ user.name }}</h3>
+                <p style="color: #858796;">{{ user.department or 'Employee' }}</p>
+            </div>
+
+            <!-- Profile Information -->
+            <div class="info-card">
+                <h5 style="font-weight: 700; color: #5a5c69; margin-bottom: 1rem;">
+                    <i class="fas fa-info-circle"></i> Personal Information
+                </h5>
+                <div class="info-item">
+                    <span class="info-label">Full Name</span>
+                    <span class="info-value">{{ user.name }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Email</span>
+                    <span class="info-value">{{ user.email }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Department</span>
+                    <span class="info-value">{{ profile.department or 'N/A' if profile else 'N/A' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Phone</span>
+                    <span class="info-value">{{ profile.phone or 'N/A' if profile else 'N/A' }}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Status</span>
+                    <span class="info-value">
+                        <span style="color: var(--success); font-weight: 600;">
+                            <i class="fas fa-check-circle"></i> Active
+                        </span>
+                    </span>
+                </div>
+            </div>
+
+            <!-- Update Form -->
+            <h5 style="font-weight: 700; color: #5a5c69; margin-bottom: 1rem;">
+                <i class="fas fa-edit"></i> Update Profile
+            </h5>
+            <form action="/user/update_profile" method="POST" enctype="multipart/form-data">
+                <div class="mb-3">
+                    <label class="form-label">Phone Number</label>
+                    <input type="tel" class="form-control" name="phone" value="{{ profile.phone if profile else '' }}"
+                        placeholder="Enter your phone number">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Profile Image</label>
+                    <input type="file" class="form-control" name="profile_image" accept="image/*">
+                    <small class="text-muted">Upload a new profile image (optional)</small>
+                </div>
+
+                <div style="display: flex; gap: 1rem;">
+                    <button type="submit" class="btn btn-success">
+                        <i class="fas fa-save"></i> Save Changes
+                    </button>
+                    <a href="/user/dashboard" class="btn btn-secondary">
+                        <i class="fas fa-times"></i> Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

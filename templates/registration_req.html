@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Request Enrollment • Smart Attendance</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #6B46C1, #4299E1);
+            color: #2D3748;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+
+        .container {
+            background: rgba(122, 135, 173, 0.562);
+            padding: 35px;
+            border-radius: 16px;
+            width: 90%;
+            max-width: 500px;
+            box-shadow: 0 15px 35px rgb(0, 0, 0);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #f8f8f8;
+            font-size: 28px;
+            position: relative;
+        }
+
+        h2:after {
+            content: '';
+            display: block;
+            width: 60px;
+            height: 4px;
+            background: #000000;
+            margin: 10px auto;
+            border-radius: 2px;
+        }
+
+        .form-group {
+            margin-bottom: 25px;
+            position: relative;
+        }
+
+        input {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 10px;
+            border: 2px solid #E2E8F0;
+            background: #F7FAFC;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            box-sizing: border-box;
+        }
+
+        input:focus {
+            border-color: #4299E1;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.2);
+        }
+
+        .file-upload {
+            background: #c1dae9c7;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 25px;
+            border: 2px dashed #4299E1;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .file-upload:hover {
+            background: #ffffff;
+            border-color: #00050a;
+        }
+
+        .file-upload label {
+            display: block;
+            margin-bottom: 10px;
+            color: #2B6CB0;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .file-count {
+            margin-top: 10px;
+            color: #4A5568;
+            font-size: 14px;
+        }
+
+        .file-count.valid {
+            color: #22543D;
+            font-weight: 600;
+        }
+
+        .preview-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .preview-item {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #E2E8F0;
+        }
+
+        .preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-item .remove-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            background: rgba(239, 68, 68, 0.9);
+            border: none;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+            color: white;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 15px;
+            margin-top: 30px;
+        }
+
+        button {
+            flex: 1;
+            padding: 12px 20px;
+            border: none;
+            border-radius: 10px;
+            font-weight: 600;
+            font-size: 16px;
+            cursor: pointer;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+
+        button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .btn-submit {
+            background: #4299E1;
+            color: white;
+        }
+
+        .btn-cancel {
+            background: #FC8181;
+            color: white;
+        }
+
+        #statusMsg {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 500;
+            text-align: center;
+            display: none;
+        }
+
+        #statusMsg.show {
+            display: block;
+        }
+
+        .status-success {
+            background: #C6F6D5;
+            color: #276749;
+        }
+
+        .status-error {
+            background: #FED7D7;
+            color: #9B2C2C;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        footer {
+            margin-top: 20px;
+            text-align: center;
+            color: #081935;
+            font-size: 16px;
+        }
+
+        footer a {
+            color: #9b0101;
+            text-decoration: none;
+            font-weight: 700;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+
+        .info-box {
+            background: #FFF5F5;
+            border: 1px solid #FEB2B2;
+            border-radius: 8px;
+            padding: 12px;
+            margin-bottom: 20px;
+            font-size: 14px;
+            color: #742A2A;
+        }
+
+        @media (max-width: 480px) {
+            .container {
+                padding: 20px;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+
+            button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Enrollment Request</h2>
+
+        <div class="info-box">
+            ℹ️ Your request will be reviewed by an admin. You'll be notified once approved.
+        </div>
+
+        <form id="enrollForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <input type="text" name="name" placeholder="Full Name *" required>
+            </div>
+
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Email Address *" required>
+            </div>
+
+            <div class="form-group">
+                <input type="tel" name="phone" placeholder="Phone Number" required>
+            </div>
+
+            <div class="form-group">
+                <input type="password" name="password" placeholder="Create Password *" required minlength="6">
+                <small style="color: #4A5568; font-size: 12px; display: block; margin-top: 5px;">
+                    Minimum 6 characters - This will be your login password
+                </small>
+            </div>
+
+            <div id="uploadArea" class="file-upload">
+                <label for="files"> Upload Your Face Images</label>
+                <p style="color: #4A5568; font-size: 14px; margin: 0;">At least 5 clear photos required</p>
+                <input type="file" id="files" name="files" accept="image/*" multiple style="display: none;">
+                <div class="file-count" id="fileCount">0 images selected</div>
+                <div class="preview-grid" id="previewGrid"></div>
+            </div>
+
+            <div class="btn-group">
+                <button type="submit" class="btn-submit" id="submitBtn">
+                    <span id="btnText">Send Request</span>
+                </button>
+                <button type="button" class="btn-cancel" onclick="backBtn()">Back</button>
+            </div>
+        </form>
+
+        <footer>
+            <div>Already have an account?
+                <a href="/login">Login here</a>
+            </div>
+        </footer>
+
+        <div id="statusMsg"></div>
+    </div>
+
+    <script>
+        const fileInput = document.getElementById('files');
+        const uploadArea = document.getElementById('uploadArea');
+        const previewGrid = document.getElementById('previewGrid');
+        const fileCount = document.getElementById('fileCount');
+        const enrollForm = document.getElementById('enrollForm');
+        const submitBtn = document.getElementById('submitBtn');
+        const btnText = document.getElementById('btnText');
+        const statusMsg = document.getElementById('statusMsg');
+
+        let selectedFiles = [];
+
+        // Click to upload
+        uploadArea.addEventListener('click', (e) => {
+            if (e.target.classList.contains('remove-btn')) return;
+            fileInput.click();
+        });
+
+        // File selection
+        fileInput.addEventListener('change', handleFiles);
+
+        // Drag and drop
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#2B6CB0';
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.style.borderColor = '#4299E1';
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.style.borderColor = '#4299E1';
+            const files = Array.from(e.dataTransfer.files);
+            handleFilesArray(files);
+        });
+
+        function handleFiles(e) {
+            const files = Array.from(e.target.files);
+            handleFilesArray(files);
+        }
+
+        function handleFilesArray(files) {
+            selectedFiles = [...selectedFiles, ...files].slice(0, 10); // Limit to 10 images
+            updatePreview();
+            updateFileCount();
+        }
+
+        function updatePreview() {
+            previewGrid.innerHTML = '';
+
+            selectedFiles.forEach((file, index) => {
+                const reader = new FileReader();
+
+                reader.onload = (e) => {
+                    const div = document.createElement('div');
+                    div.className = 'preview-item';
+                    div.innerHTML = `
+                        <img src="${e.target.result}" alt="Preview ${index + 1}">
+                        <button type="button" class="remove-btn" onclick="removeFile(${index})">×</button>
+                    `;
+                    previewGrid.appendChild(div);
+                };
+
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updatePreview();
+            updateFileCount();
+        }
+
+        function updateFileCount() {
+            const count = selectedFiles.length;
+            fileCount.textContent = `${count} image${count !== 1 ? 's' : ''} selected`;
+
+            if (count >= 5) {
+                fileCount.classList.add('valid');
+            } else {
+                fileCount.classList.remove('valid');
+            }
+        }
+
+        // Form submission
+        enrollForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+
+            if (selectedFiles.length < 5) {
+                showStatus("Please upload at least 5 face images.", "error");
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('name', enrollForm.querySelector('[name="name"]').value);
+            formData.append('email', enrollForm.querySelector('[name="email"]').value);
+            formData.append('phone', enrollForm.querySelector('[name="phone"]').value);
+            formData.append('password', enrollForm.querySelector('[name="password"]').value);
+
+            selectedFiles.forEach(file => {
+                formData.append('files', file);
+            });
+
+            // Show loading state
+            submitBtn.disabled = true;
+            btnText.innerHTML = '<span class="spinner"></span> Submitting...';
+
+            try {
+                const response = await fetch('/submit_enrollment_request', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'success') {
+                    showStatus(`✅ ${data.msg}`, 'success');
+
+                    // Reset form after 2 seconds
+                    setTimeout(() => {
+                        enrollForm.reset();
+                        selectedFiles = [];
+                        previewGrid.innerHTML = '';
+                        updateFileCount();
+                    }, 2000);
+
+                    // Redirect to login after 3 seconds
+                    setTimeout(() => {
+                        window.location.href = '/login';
+                    }, 3000);
+                } else {
+                    showStatus(`❌ ${data.msg}`, 'error');
+                }
+            } catch (error) {
+                showStatus('❌ Error submitting request. Please try again.', 'error');
+                console.error(error);
+            } finally {
+                submitBtn.disabled = false;
+                btnText.textContent = 'Send Request';
+            }
+        });
+
+        function showStatus(message, type) {
+            statusMsg.textContent = message;
+            statusMsg.className = `status-${type} show`;
+
+            setTimeout(() => {
+                statusMsg.classList.remove('show');
+            }, 5000);
+        }
+
+        function backBtn() {
+            window.location.href = "/login";
+        }
+
+        // Make removeFile globally accessible
+        window.removeFile = removeFile;
+    </script>
+</body>
+
+</html>

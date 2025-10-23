@@ -1,0 +1,563 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>User Dashboard - Smart Attendance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #4e73df;
+            --success: #00140d;
+            --info: #36b9cc;
+            --warning: #f6c23e;
+            --danger: #e74a3b;
+            --dark: #030827;
+            --sidebar: linear-gradient(180deg, #3faceb 10%, #000e09 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Nunito', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #00071b;
+        }
+
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 250px;
+            height: 100vh;
+            background: var(--sidebar);
+            z-index: 100;
+        }
+
+        .sidebar-brand {
+            padding: 1.5rem;
+            text-align: center;
+            color: white;
+            font-size: 1.3rem;
+            font-weight: 700;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            color: rgba(255, 255, 255, 0.8);
+            text-decoration: none;
+            transition: all 0.2s;
+        }
+
+        .nav-link:hover {
+            color: white;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-link.active {
+            color: white;
+            font-weight: 700;
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .nav-link i {
+            margin-right: 0.5rem;
+            width: 20px;
+        }
+
+        .main-content {
+            margin-left: 250px;
+            padding: 0;
+        }
+
+        .topbar {
+            background: white;
+            padding: 1rem 1.5rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            background: var(--success);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 700;
+            font-size: 1.2rem;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 0.35rem;
+            padding: 1.5rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            text-align: center;
+        }
+
+        .stat-card h6 {
+            color: var(--primary);
+            text-transform: uppercase;
+            font-size: 0.7rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-card .number {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin: 0;
+        }
+
+        .attendance-card {
+            background: white;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            padding: 2rem;
+            border-left: 4px solid;
+        }
+
+        .attendance-card.check-in {
+            border-left-color: var(--success);
+        }
+
+        .time-display {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--dark);
+            text-align: center;
+        }
+
+        .date-display {
+            font-size: 1.2rem;
+            color: #858796;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .status-badge {
+            padding: 0.5rem 1.5rem;
+            border-radius: 2rem;
+            font-size: 0.9rem;
+            font-weight: 600;
+        }
+
+        .status-badge.on-time {
+            background: rgba(28, 200, 138, 0.1);
+            color: var(--success);
+        }
+
+        .data-card {
+            background: white;
+            border-radius: 0.35rem;
+            box-shadow: 0 0.15rem 1.75rem rgba(58, 59, 69, 0.15);
+            margin-bottom: 1.5rem;
+        }
+
+        .data-card-header {
+            padding: 1rem 1.25rem;
+            border-bottom: 1px solid #e3e6f0;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .data-card-body {
+            padding: 1.25rem;
+        }
+
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        .table th {
+            background: #f8f9fc;
+            padding: 0.75rem;
+            text-align: left;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            font-weight: 700;
+        }
+
+        .table td {
+            padding: 0.75rem;
+            border-top: 1px solid #e3e6f0;
+        }
+
+        .badge {
+            padding: 0.35rem 0.75rem;
+            border-radius: 0.35rem;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-success {
+            background: rgba(28, 200, 138, 0.1);
+            color: var(--success);
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                margin-left: -250px;
+            }
+
+            .sidebar.active {
+                margin-left: 0;
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- Sidebar -->
+    <nav class="sidebar">
+        <div class="sidebar-brand">
+            <i class="fas fa-user"></i> User Panel
+        </div>
+        <ul class="nav flex-column" style="list-style: none;">
+            <li class="nav-item">
+                <a class="nav-link active" href="/user/dashboard">
+                    <i class="fas fa-fw fa-tachometer-alt"></i>
+                    <span>Dashboard</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/user/profile">
+                    <i class="fas fa-fw fa-user"></i>
+                    <span>Profile</span>
+                </a>
+            </li>
+            <li class="nav-item">
+                <a class="nav-link" href="/logout">
+                    <i class="fas fa-fw fa-sign-out-alt"></i>
+                    <span>Logout</span>
+                </a>
+            </li>
+        </ul>
+    </nav>
+
+    <!-- Main Content -->
+    <div class="main-content">
+        <!-- Top Bar -->
+        <nav class="topbar">
+            <button class="btn btn-secondary" id="sidebarToggle" style="display: none;">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h4 style="margin: 0; color: var(--dark);">My Dashboard</h4>
+            <div class="user-profile">
+                <div>
+                    <div style="font-weight: 600;">{{ user.name }}</div>
+                    <small style="color: #858796;">{{ user.department or 'Employee' }}</small>
+                </div>
+                <div class="user-avatar">
+                    {% if user.profile_image %}
+                    <img src="data:image/jpeg;base64,{{ user.profile_image }}"
+                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
+                    {% else %}
+                    {{ user.name[0].upper() }}
+                    {% endif %}
+                </div>
+            </div>
+        </nav>
+
+        <!-- Content -->
+        <div class="container-fluid" style="padding: 1.5rem;">
+            <!-- Quick Stats -->
+            <div class="row mb-4">
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <div class="stat-card">
+                        <h6>Present Days</h6>
+                        <p class="number" id="presentDays">0</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <div class="stat-card">
+                        <h6>Attendance %</h6>
+                        <p class="number" id="attendancePercent">0%</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <div class="stat-card">
+                        <h6>This Month</h6>
+                        <p class="number" id="thisMonth">0</p>
+                    </div>
+                </div>
+                <div class="col-lg-3 col-md-6 mb-4">
+                    <div class="stat-card">
+                        <h6>Status</h6>
+                        <p class="number" style="font-size: 1.5rem; color: var(--success);">Active</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Current Time & Last Attendance -->
+            <div class="row mb-4">
+                <div class="col-lg-6 mb-4">
+                    <div class="attendance-card check-in">
+                        <div class="time-display" id="currentTime">--:--</div>
+                        <div class="date-display" id="currentDate">Loading...</div>
+                        <div style="text-align: center;">
+                            <span class="status-badge on-time">
+                                <i class="fas fa-clock"></i> Real-time Clock
+                            </span>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-lg-6 mb-4">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <i class="fas fa-history"></i> Last Attendance
+                        </div>
+                        <div class="data-card-body" id="lastAttendance">
+                            <div style="text-align: center; color: #858796; padding: 2rem;">
+                                Loading...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance History -->
+            <div class="row">
+                <div class="col-12">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <i class="fas fa-list"></i> Recent Attendance History
+                        </div>
+                        <div class="data-card-body">
+                            <div class="table-responsive" id="historyTable">
+                                <div style="text-align: center; padding: 2rem;">Loading...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Attendance Chart -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="data-card">
+                        <div class="data-card-header">
+                            <i class="fas fa-chart-bar"></i> Monthly Attendance
+                        </div>
+                        <div class="data-card-body">
+                            <canvas id="userChart" style="max-height: 300px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let userChart = null;
+
+        async function initDashboard() {
+            updateDateTime();
+            setInterval(updateDateTime, 1000);
+
+            await loadStats();
+            await loadAttendanceHistory();
+            await loadChart();
+
+            setInterval(loadStats, 30000);
+            setInterval(loadAttendanceHistory, 30000);
+        }
+
+        function updateDateTime() {
+            const now = new Date();
+            document.getElementById('currentTime').textContent = now.toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+
+            document.getElementById('currentDate').textContent = now.toLocaleDateString('en-US', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric'
+            });
+        }
+
+        async function loadStats() {
+            try {
+                const res = await fetch('/api/user/attendance_stats?days=30');
+                const data = await res.json();
+
+                document.getElementById('presentDays').textContent = data.present_days;
+                document.getElementById('attendancePercent').textContent = data.percentage + '%';
+
+                // This month
+                const thisMonthRes = await fetch('/api/user/attendance_stats?days=' + new Date().getDate());
+                const thisMonthData = await thisMonthRes.json();
+                document.getElementById('thisMonth').textContent = thisMonthData.present_days;
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadAttendanceHistory() {
+            try {
+                const res = await fetch('/api/user/attendance_history');
+                const records = await res.json();
+
+                // Last attendance
+                const lastEl = document.getElementById('lastAttendance');
+                if (records.length > 0) {
+                    const last = records[0];
+                    const time = new Date(last.timestamp);
+                    const conf = Math.round(last.confidence * 100);
+
+                    lastEl.innerHTML = `
+                        <div style="text-align: center; padding: 1rem;">
+                            <div style="font-size: 1.5rem; font-weight: 700; color: var(--success); margin-bottom: 0.5rem;">
+                                ${time.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
+                            </div>
+                            <div style="color: #858796;">
+                                ${time.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' })}
+                            </div>
+                            <div style="margin-top: 1rem;">
+                                <span class="badge badge-success">Confidence: ${conf}%</span>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    lastEl.innerHTML = '<div style="text-align: center; color: #858796; padding: 2rem;">No attendance records yet</div>';
+                }
+
+                // History table
+                const tableEl = document.getElementById('historyTable');
+                if (records.length === 0) {
+                    tableEl.innerHTML = '<div style="text-align: center; padding: 2rem;">No attendance records yet</div>';
+                    return;
+                }
+
+                tableEl.innerHTML = `
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Confidence</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${records.slice(0, 20).map(r => {
+                    const dt = new Date(r.timestamp);
+                    const date = dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+                    const time = dt.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                    const conf = Math.round(r.confidence * 100);
+
+                    return `
+                                    <tr>
+                                        <td>${date}</td>
+                                        <td>${time}</td>
+                                        <td><span class="badge badge-success">${conf}%</span></td>
+                                    </tr>
+                                `;
+                }).join('')}
+                        </tbody>
+                    </table>
+                `;
+            } catch (error) {
+                console.error('Error loading attendance history:', error);
+            }
+        }
+
+        async function loadChart() {
+            try {
+                const res = await fetch('/api/user/attendance_history');
+                const records = await res.json();
+
+                // Group by date
+                const dailyCounts = {};
+                records.forEach(r => {
+                    const date = new Date(r.timestamp).toISOString().split('T')[0];
+                    dailyCounts[date] = (dailyCounts[date] || 0) + 1;
+                });
+
+                // Get last 30 days
+                const labels = [];
+                const data = [];
+                const today = new Date();
+
+                for (let i = 29; i >= 0; i--) {
+                    const d = new Date(today);
+                    d.setDate(d.getDate() - i);
+                    const dateStr = d.toISOString().split('T')[0];
+                    labels.push(d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                    data.push(dailyCounts[dateStr] || 0);
+                }
+
+                const ctx = document.getElementById('userChart').getContext('2d');
+
+                if (userChart) {
+                    userChart.destroy();
+                }
+
+                userChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Attendance Count',
+                            data: data,
+                            backgroundColor: 'rgba(28, 200, 138, 0.8)',
+                            borderColor: 'rgba(28, 200, 138, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                ticks: { stepSize: 1 }
+                            }
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('Error loading chart:', error);
+            }
+        }
+
+        // Sidebar toggle
+        document.getElementById('sidebarToggle').addEventListener('click', function () {
+            document.querySelector('.sidebar').classList.toggle('active');
+        });
+
+        document.addEventListener('DOMContentLoaded', initDashboard);
+    </script>
+</body>
+
+</html>

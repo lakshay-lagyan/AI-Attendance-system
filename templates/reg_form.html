@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Face Scan Enrollment</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #333;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+        }
+
+        .container {
+            background: #fff;
+            padding: 25px;
+            border-radius: 12px;
+            width: 500px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
+        }
+
+        h2 {
+            text-align: center;
+            margin-bottom: 20px;
+            color: #2c5282;
+        }
+
+        .option-group {
+            margin-bottom: 20px;
+            text-align: center;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ccc;
+            margin-top: 8px;
+        }
+
+        video {
+            width: 100%;
+            border-radius: 10px;
+            display: none;
+        }
+
+        #snapshots img {
+            margin: 5px;
+            border-radius: 6px;
+            border: 2px solid #4299e1;
+        }
+
+        button {
+            padding: 12px 20px;
+            margin: 10px 5px 0 0;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .btn-scan {
+            background: #4299e1;
+            color: #fff;
+        }
+
+        .btn-submit {
+            background: #48bb78;
+            color: #fff;
+        }
+
+        .btn-cancel {
+            background: #e53e3e;
+            color: #fff;
+        }
+
+        #statusMsg {
+            margin-top: 15px;
+            font-weight: bold;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <h2>Enroll New User</h2>
+
+        <form id="enrollForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <input type="text" name="name" placeholder="Full Name" required>
+            </div>
+            <div class="form-group">
+                <input type="text" name="department" placeholder="Department">
+            </div>
+            <div class="form-group">
+                <input type="email" name="email" placeholder="Email">
+            </div>
+            <div class="form-group">
+                <input type="tel" name="phone" placeholder="Phone">
+            </div>
+
+            <!-- Choose Method -->
+            <div class="option-group">
+                <label><input type="radio" name="method" value="scan" checked> Scan Face</label>
+                <label><input type="radio" name="method" value="upload"> Upload Images</label>
+            </div>
+
+            <!-- Scan Option -->
+            <div id="scanOption">
+                <video id="video" autoplay></video>
+                <canvas id="canvas" style="display:none;"></canvas>
+                <div id="snapshots"></div>
+                <button type="button" class="btn-scan" id="scanBtn">Start Scanning</button>
+            </div>
+
+            <!-- Upload Option -->
+            <div id="uploadOption" style="display:none;">
+                <label>Upload at least 5 Face Images</label>
+                <input type="file" id="files" name="files" accept="image/*" multiple>
+            </div>
+
+            <button type="submit" class="btn-submit">Enroll</button>
+            <button type="button" class="btn-cancel" onclick="backBtn()">Back</button>
+        </form>
+
+        <div id="statusMsg"></div>
+    </div>
+
+
+    <!-- java script -->
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const snapshotsDiv = document.getElementById("snapshots");
+        const scanBtn = document.getElementById("scanBtn");
+        let snapshots = [];
+
+        // Capture sequence steps
+        const captureSteps = [
+            "Look straight at the camera (Front)",
+            "Left Angles",
+            "Right Angles",
+            "Down side",
+            "with mask",
+            "with glasses"
+        ];
+
+        // Toggle method view
+        document.querySelectorAll("input[name='method']").forEach(radio => {
+            radio.addEventListener("change", () => {
+                if (radio.value === "scan" && radio.checked) {
+                    video.style.display = "block";
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then(stream => { video.srcObject = stream; })
+                        .catch(err => { alert("Camera access denied: " + err); });
+                    document.getElementById("scanOption").style.display = "block";
+                    document.getElementById("uploadOption").style.display = "none";
+                } else if (radio.value === "upload" && radio.checked) {
+                    video.style.display = "none";
+                    if (video.srcObject) {
+                        video.srcObject.getTracks().forEach(track => track.stop());
+                    }
+                    document.getElementById("scanOption").style.display = "none";
+                    document.getElementById("uploadOption").style.display = "block";
+                }
+            });
+        });
+
+//  messsage
+        document.getElementById("statusMsg").innerHTML =
+          `<p style="color:purple;"> <b>MINTAIN THE EYE CONTACT WITH CAMERA</b> </p>`
+
+  //  multi-angle scanning
+        scanBtn.addEventListener("click", () => {
+            snapshots = [];
+            snapshotsDiv.innerHTML = "";
+            let count = 0;
+
+            const interval = setInterval(() => {
+                if (count >= captureSteps.length) {
+                    clearInterval(interval);
+                    document.getElementById("statusMsg").innerHTML =
+                        `<p style="color:green;"> All angles captured! You can now submit.</p>`;
+                    return;
+                }
+
+                // Draw frame
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                ctx.drawImage(video, 0, 0);
+
+                // Convert to image
+                let dataUrl = canvas.toDataURL("image/jpeg", 0.8);
+                snapshots.push(dataUrl);
+
+                let img = document.createElement("img");
+                img.src = dataUrl;
+                img.width = 70;
+                snapshotsDiv.appendChild(img);
+
+                // Update 
+                document.getElementById("statusMsg").innerHTML =
+                    `<p style="color:blue;"> Step ${count + 1}/${captureSteps.length}: ${captureSteps[count]}</p>`;
+
+                count++;
+            }, 3000); 
+        });
+
+        // Form submission
+        document.getElementById("enrollForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            let formData = new FormData(e.target);
+            const method = formData.get("method");
+
+            if (method === "scan") {
+                if (snapshots.length < captureSteps.length) {
+                    document.getElementById("statusMsg").innerHTML =
+                        `<p style="color:red;">❌ Please complete all ${captureSteps.length} scan steps.</p>`;
+                    return;
+                }
+                snapshots.forEach((dataUrl, i) => {
+                    let byteString = atob(dataUrl.split(",")[1]);
+                    let intArray = new Uint8Array(byteString.length);
+                    for (let j = 0; j < byteString.length; j++) {
+                        intArray[j] = byteString.charCodeAt(j);
+                    }
+                    let file = new Blob([intArray], { type: "image/jpeg" });
+                    formData.append("files", file, `scan_${i}.jpg`);
+                });
+            } else {
+                const files = document.getElementById("files").files;
+                if (files.length < 5) {
+                    document.getElementById("statusMsg").innerHTML =
+                        `<p style="color:red;">❌ Please upload at least 5 images.</p>`;
+                    return;
+                }
+            }
+
+            try {
+                let res = await fetch("/enroll", { method: "POST", body: formData });
+                let data = await res.json();
+                document.getElementById("statusMsg").innerHTML =
+                    data.status === "success"
+                        ? `<p style="color:green;">✅ ${data.name} enrolled successfully</p>`
+                        : `<p style="color:red;">❌ ${data.msg}</p>`;
+            } catch (err) {
+                document.getElementById("statusMsg").innerHTML =
+                    `<p style="color:red;">❌ Error during enrollment.</p>`;
+            }
+        });
+
+        function backBtn() {
+            window.location.href = "/";
+        }
+    </script>
+
+</body>
+
+</html>
