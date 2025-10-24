@@ -32,8 +32,12 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "replace_this_with_a_real_secret")
 
 # --- Database setup (Postgres + SQLAlchemy) ---
+# Fix DATABASE_URL for Render (postgres:// -> postgresql://)
 DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:lakshaybazida@localhost:5432/mydb")
-engine = create_engine(DATABASE_URL, echo=False, future=True)
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL, echo=False, future=True, pool_pre_ping=True, pool_recycle=3600)
 SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False))
 Base = declarative_base()
 
@@ -103,21 +107,26 @@ class AttendanceModel(Base):
 # Create tables (safe on first run)
 Base.metadata.create_all(bind=engine)
 
-# --- FAISS Vector DB Setup (same logic) ---
+# --- FAISS Vector DB Setup ---
 EMBEDDING_DIM = 512
 faiss_index = None
 person_id_map = []
 
 def initialize_faiss_index():
     global faiss_index, person_id_map
-    index_path = "faiss_index.bin"
-    map_path = "person_id_map.pkl"
+    index_path = "/tmp/faiss_index.bin"  # Use /tmp for Render ephemeral storage
+    map_path = "/tmp/person_id_map.pkl"
     
     if os.path.exists(index_path) and os.path.exists(map_path):
-        faiss_index = faiss.read_index(index_path)
-        with open(map_path, 'rb') as f:
-            person_id_map = pickle.load(f)
-        logging.info(f"Loaded FAISS index with {faiss_index.ntotal} faces")
+        try:
+            faiss_index = faiss.read_index(index_path)
+            with open(map_path, 'rb') as f:
+                person_id_map = pickle.load(f)
+            logging.info(f"Loaded FAISS index with {faiss_index.ntotal} faces")
+        except Exception as e:
+            logging.warning(f"Failed to load FAISS index: {e}. Creating new one.")
+            faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+            person_id_map = []
     else:
         faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
         person_id_map = []
@@ -126,9 +135,12 @@ def initialize_faiss_index():
 def save_faiss_index():
     if faiss_index is None:
         return
-    faiss.write_index(faiss_index, "faiss_index.bin")
-    with open("person_id_map.pkl", 'wb') as f:
-        pickle.dump(person_id_map, f)
+    try:
+        faiss.write_index(faiss_index, "/tmp/faiss_index.bin")
+        with open("/tmp/person_id_map.pkl", 'wb') as f:
+            pickle.dump(person_id_map, f)
+    except Exception as e:
+        logging.error(f"Failed to save FAISS index: {e}")
 
 def rebuild_faiss_index():
     global faiss_index, person_id_map
@@ -217,7 +229,7 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-# --- Helper functions for embeddings / face recognition (unchanged) ---
+# --- Helper functions for embeddings / face recognition ---
 def get_face_embedding(image):
     try:
         # accept uploaded file-like objects or already-decoded images
@@ -259,7 +271,7 @@ def is_real_face(face_img):
     except Exception:
         return False
 
-# --- Routes (very similar semantics, now using SQLAlchemy) ---
+# --- Routes ---
 @app.route("/")
 def index():
     if current_user.is_authenticated:
@@ -847,78 +859,93 @@ def user_attendance_stats():
     finally:
         db.close()
 
-# Camera recognition streaming (same idea)
+# Camera recognition streaming - DISABLED for Render (no camera access)
 def generate_camera_stream():
-    cap = cv.VideoCapture(0)
-    threshold = 0.6
-    marked_attendance = {}
-    cooldown_period = 300
-    if not cap.isOpened():
-        logging.error("Camera not accessible")
-        return
-    while True:
-        success, frame = cap.read()
-        if not success or frame is None:
-            break
-        try:
-            face_objs = DeepFace.extract_faces(img_path=frame, detector_backend="opencv", enforce_detection=False, align=False)
-            for face_obj in face_objs:
-                facial_area = face_obj["facial_area"]
-                x, y, w, h = facial_area["x"], facial_area["y"], facial_area["w"], facial_area["h"]
-                face = frame[y:y+h, x:x+w]
-                if face.size == 0:
-                    continue
-                if not is_real_face(face):
-                    cv.putText(frame, "Fake Face!", (x, y-10), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
-                    cv.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
-                    continue
-                embedding = get_face_embedding(face)
-                if embedding is None:
-                    continue
-                matched_name, confidence = search_face_faiss(embedding, threshold)
-                if matched_name:
-                    # Check if user is blocked
-                    db = SessionLocal()
-                    try:
-                        person = db.query(PersonModel).filter(PersonModel.name == matched_name).first()
-                        if person and person.status == "blocked":
-                            label = f"{matched_name} - BLOCKED"
-                            color = (0, 0, 255)
-                            cv.putText(frame, label, (x, y-10), cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                            cv.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-                            continue
-                    finally:
-                        db.close()
-                    label = f"{matched_name} ({confidence:.2f})"
-                    color = (0, 255, 0)
-                    current_time = datetime.datetime.utcnow()
-                    last_marked = marked_attendance.get(matched_name)
-                    if not last_marked or (current_time - last_marked).total_seconds() > cooldown_period:
+   
+    try:
+        cap = cv.VideoCapture(0)
+        threshold = 0.6
+        marked_attendance = {}
+        cooldown_period = 300
+        
+        if not cap.isOpened():
+            logging.error("Camera not accessible - this is expected on Render")
+            # Return a placeholder frame indicating no camera
+            placeholder = np.zeros((480, 640, 3), dtype=np.uint8)
+            cv.putText(placeholder, "Camera not available on server", (50, 240), 
+                      cv.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            ret, buffer = cv.imencode(".jpg", placeholder)
+            frame_bytes = buffer.tobytes()
+            yield (b"--frame\r\n"
+                   b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+            return
+        
+        while True:
+            success, frame = cap.read()
+            if not success or frame is None:
+                break
+            try:
+                face_objs = DeepFace.extract_faces(img_path=frame, detector_backend="opencv", enforce_detection=False, align=False)
+                for face_obj in face_objs:
+                    facial_area = face_obj["facial_area"]
+                    x, y, w, h = facial_area["x"], facial_area["y"], facial_area["w"], facial_area["h"]
+                    face = frame[y:y+h, x:x+w]
+                    if face.size == 0:
+                        continue
+                    if not is_real_face(face):
+                        cv.putText(frame, "Fake Face!", (x, y-10), cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                        cv.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
+                        continue
+                    embedding = get_face_embedding(face)
+                    if embedding is None:
+                        continue
+                    matched_name, confidence = search_face_faiss(embedding, threshold)
+                    if matched_name:
+                        # Check if user is blocked
                         db = SessionLocal()
                         try:
-                            att = AttendanceModel(name=matched_name, timestamp=current_time, confidence=confidence)
-                            db.add(att)
-                            db.commit()
-                            marked_attendance[matched_name] = current_time
-                            logging.info("✓ Attendance marked for %s", matched_name)
+                            person = db.query(PersonModel).filter(PersonModel.name == matched_name).first()
+                            if person and person.status == "blocked":
+                                label = f"{matched_name} - BLOCKED"
+                                color = (0, 0, 255)
+                                cv.putText(frame, label, (x, y-10), cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                                cv.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+                                continue
                         finally:
                             db.close()
-                else:
-                    label = "Unknown"
-                    color = (0, 165, 255)
-                cv.putText(frame, label, (x, y-10), cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                cv.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-        except Exception as e:
-            logging.exception("Recognition error: %s", e)
-        ret, buffer = cv.imencode(".jpg", frame)
-        frame_bytes = buffer.tobytes()
-        yield (b"--frame\r\n"
-               b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
-    cap.release()
+                        label = f"{matched_name} ({confidence:.2f})"
+                        color = (0, 255, 0)
+                        current_time = datetime.datetime.utcnow()
+                        last_marked = marked_attendance.get(matched_name)
+                        if not last_marked or (current_time - last_marked).total_seconds() > cooldown_period:
+                            db = SessionLocal()
+                            try:
+                                att = AttendanceModel(name=matched_name, timestamp=current_time, confidence=confidence)
+                                db.add(att)
+                                db.commit()
+                                marked_attendance[matched_name] = current_time
+                                logging.info("✓ Attendance marked for %s", matched_name)
+                            finally:
+                                db.close()
+                    else:
+                        label = "Unknown"
+                        color = (0, 165, 255)
+                    cv.putText(frame, label, (x, y-10), cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                    cv.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+            except Exception as e:
+                logging.exception("Recognition error: %s", e)
+            ret, buffer = cv.imencode(".jpg", frame)
+            frame_bytes = buffer.tobytes()
+            yield (b"--frame\r\n"
+                   b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
+        cap.release()
+    except Exception as e:
+        logging.exception("Camera stream error: %s", e)
 
 @app.route("/video_feed")
 @admin_required
 def video_feed():
+    
     return Response(generate_camera_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route("/mark_attendance", methods=["POST"])
@@ -945,5 +972,10 @@ def mark_attendance():
             db.close()
     return jsonify({"status": "failed", "msg": "No match found"}), 404
 
+# Health check endpoint for Render
+@app.route("/health")
+def health_check():
+    return jsonify({"status": "healthy", "timestamp": datetime.datetime.utcnow().isoformat()})
+
 if __name__ == "__main__":
-    app.run(debug=True, port=int(os.environ.get("PORT", 5000)))
+    app.run(host="0.0.0.0", debug=False, port=int(os.environ.get("PORT", 5000)))
