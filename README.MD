@@ -1,5 +1,0 @@
-ADMIN CREDENTIALS
-
-ADMIN:
- EMAIL : admin@email.com
- PASSWORD : 123word
