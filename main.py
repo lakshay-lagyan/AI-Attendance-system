@@ -861,7 +861,11 @@ def user_attendance_stats():
 
 # Camera recognition streaming - DISABLED for Render (no camera access)
 def generate_camera_stream():
-   
+    """
+    WARNING: This function will not work on Render as it requires webcam access.
+    Render is a headless server environment without camera hardware.
+    Consider removing this route or implementing a file upload alternative.
+    """
     try:
         cap = cv.VideoCapture(0)
         threshold = 0.6
@@ -945,7 +949,10 @@ def generate_camera_stream():
 @app.route("/video_feed")
 @admin_required
 def video_feed():
-    
+    """
+    WARNING: Video feed will not work on Render (no camera hardware).
+    This is kept for local development only.
+    """
     return Response(generate_camera_stream(), mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route("/mark_attendance", methods=["POST"])
