@@ -5,28 +5,35 @@ import pickle
 import datetime
 from functools import wraps
 import sys
+import types
 
-# CRITICAL FIX: Block retinaface import (incompatible with TF 2.20)
-# This prevents deepface from trying to load retinaface
-class BlockRetinaFaceImport:
-    def find_module(self, fullname, path=None):
-        if fullname == 'retinaface' or fullname.startswith('retinaface.'):
-            return self
+# CRITICAL FIX: Create a fake retinaface module BEFORE deepface imports it
+# This prevents the TF 2.20 compatibility error
+class FakeRetinaFace:
+    """Dummy RetinaFace class that won't be used"""
+    @staticmethod
+    def build_model():
         return None
     
-    def load_module(self, fullname):
-        # Return a dummy module to prevent import errors
-        import types
-        mod = types.ModuleType(fullname)
-        mod.__file__ = '<blocked>'
-        mod.__loader__ = self
-        mod.__package__ = fullname.rpartition('.')[0]
-        sys.modules[fullname] = mod
-        return mod
+    @staticmethod
+    def detect_faces(img):
+        return {}
 
-# Install the import blocker BEFORE importing deepface
-sys.meta_path.insert(0, BlockRetinaFaceImport())
+# Create fake retinaface module and submodules
+fake_rf = types.ModuleType('retinaface')
+fake_rf.RetinaFace = FakeRetinaFace
+fake_rf.__version__ = '0.0.17'
 
+fake_commons = types.ModuleType('retinaface.commons')
+fake_package_utils = types.ModuleType('retinaface.commons.package_utils')
+fake_package_utils.validate_for_keras3 = lambda: None  # Do nothing
+
+# Install fake modules
+sys.modules['retinaface'] = fake_rf
+sys.modules['retinaface.commons'] = fake_commons
+sys.modules['retinaface.commons.package_utils'] = fake_package_utils
+
+# Now import deepface - it will use the fake retinaface
 import numpy as np
 import faiss
 import cv2 as cv
