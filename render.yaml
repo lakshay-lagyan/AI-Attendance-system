@@ -3,8 +3,8 @@ services:
     name: face-recognition-attendance
     env: python
     runtime: python
-    buildCommand: "pip install --upgrade pip setuptools wheel && pip install -r requirements.txt"
-    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --timeout 120"
+    buildCommand: "pip install --upgrade pip setuptools wheel && pip install --no-cache-dir -r requirements.txt"
+    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300"
     plan: free
     envVars:
       - key: PYTHON_VERSION
@@ -17,6 +17,9 @@ services:
         fromDatabase:
           name: face-recognition-db
           property: connectionString
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: "2"
+    healthCheckPath: /health
     
   - type: pserv
     name: face-recognition-db
