@@ -2,27 +2,18 @@ services:
   - type: web
     name: face-recognition-attendance
     env: python
-    runtime: python
     buildCommand: "pip install --upgrade pip setuptools wheel && pip install --no-cache-dir -r requirements.txt"
-    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300"
+    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 --log-level info"
     plan: free
     envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.9
       - key: FLASK_SECRET
         generateValue: true
       - key: CREATE_ADMIN_SECRET
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: face-recognition-db
-          property: connectionString
+        value: postgresql://face_recognition_db_8dqn_user:TY2EMvPNOPhS71I0OnhWYx9kj00kObSD@dpg-d3tuuo1r0fns73aq7bm0-a/face_recognition_db_8dqn
       - key: TF_CPP_MIN_LOG_LEVEL
         value: "2"
+      - key: TF_ENABLE_ONEDNN_OPTS
+        value: "0"
     healthCheckPath: /health
-    
-  - type: pserv
-    name: face-recognition-db
-    env: postgres
-    plan: free
-    ipAllowList: []
