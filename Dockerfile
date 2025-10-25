@@ -34,6 +34,7 @@ EXPOSE 10000
 # Set environment variables
 ENV PYTHONUNBUFFERED=1
 ENV PORT=10000
+ENV TF_USE_LEGACY_KERAS=0
 
 # Run gunicorn
 CMD gunicorn main:app --bind 0.0.0.0:$PORT --workers 2 --threads 2 --timeout 300 --access-logfile - --error-logfile -
