@@ -4,6 +4,28 @@ import base64
 import pickle
 import datetime
 from functools import wraps
+import sys
+
+# CRITICAL FIX: Block retinaface import (incompatible with TF 2.20)
+# This prevents deepface from trying to load retinaface
+class BlockRetinaFaceImport:
+    def find_module(self, fullname, path=None):
+        if fullname == 'retinaface' or fullname.startswith('retinaface.'):
+            return self
+        return None
+    
+    def load_module(self, fullname):
+        # Return a dummy module to prevent import errors
+        import types
+        mod = types.ModuleType(fullname)
+        mod.__file__ = '<blocked>'
+        mod.__loader__ = self
+        mod.__package__ = fullname.rpartition('.')[0]
+        sys.modules[fullname] = mod
+        return mod
+
+# Install the import blocker BEFORE importing deepface
+sys.meta_path.insert(0, BlockRetinaFaceImport())
 
 import numpy as np
 import faiss
@@ -890,7 +912,8 @@ def generate_camera_stream():
             if not success or frame is None:
                 break
             try:
-                face_objs = DeepFace.extract_faces(img_path=frame, detector_backend="opencv", enforce_detection=False, align=False)
+                # Use mtcnn instead of retinaface for TF 2.20 compatibility
+                face_objs = DeepFace.extract_faces(img_path=frame, detector_backend="mtcnn", enforce_detection=False, align=False)
                 for face_obj in face_objs:
                     facial_area = face_obj["facial_area"]
                     x, y, w, h = facial_area["x"], facial_area["y"], facial_area["w"], facial_area["h"]

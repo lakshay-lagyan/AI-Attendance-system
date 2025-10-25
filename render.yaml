@@ -3,7 +3,7 @@ services:
     name: face-recognition-attendance
     env: python
     buildCommand: "pip install --upgrade pip setuptools wheel && pip install --no-cache-dir -r requirements.txt"
-    startCommand: "gunicorn main:app --bind 0.0.0.0:$PORT --workers 1 --threads 2 --timeout 300 --log-level info"
+    startCommand: "gunicorn main:app"
     plan: free
     envVars:
       - key: FLASK_SECRET
@@ -16,4 +16,6 @@ services:
         value: "2"
       - key: TF_ENABLE_ONEDNN_OPTS
         value: "0"
+      - key: DEEPFACE_HOME
+        value: "/tmp/.deepface"
     healthCheckPath: /health
