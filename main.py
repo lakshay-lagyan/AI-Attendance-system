@@ -1,39 +1,11 @@
+
 import logging
 import os
 import base64
 import pickle
 import datetime
 from functools import wraps
-import sys
-import types
 
-# CRITICAL FIX: Create a fake retinaface module BEFORE deepface imports it
-# This prevents the TF 2.20 compatibility error
-class FakeRetinaFace:
-    """Dummy RetinaFace class that won't be used"""
-    @staticmethod
-    def build_model():
-        return None
-    
-    @staticmethod
-    def detect_faces(img):
-        return {}
-
-# Create fake retinaface module and submodules
-fake_rf = types.ModuleType('retinaface')
-fake_rf.RetinaFace = FakeRetinaFace
-fake_rf.__version__ = '0.0.17'
-
-fake_commons = types.ModuleType('retinaface.commons')
-fake_package_utils = types.ModuleType('retinaface.commons.package_utils')
-fake_package_utils.validate_for_keras3 = lambda: None  # Do nothing
-
-# Install fake modules
-sys.modules['retinaface'] = fake_rf
-sys.modules['retinaface.commons'] = fake_commons
-sys.modules['retinaface.commons.package_utils'] = fake_package_utils
-
-# Now import deepface - it will use the fake retinaface
 import numpy as np
 import faiss
 import cv2 as cv
@@ -61,8 +33,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "replace_this_with_a_real_secret")
 
 # --- Database setup (Postgres + SQLAlchemy) ---
-# Fix DATABASE_URL for Render (postgres:// -> postgresql://)
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:lakshaybazida@localhost:5432/mydb")
+DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:password@localhost:5432/mydb")
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
@@ -133,7 +104,7 @@ class AttendanceModel(Base):
     timestamp = Column(DateTime, default=datetime.datetime.utcnow)
     confidence = Column(Float, default=0.0)
 
-# Create tables (safe on first run)
+# Create tables
 Base.metadata.create_all(bind=engine)
 
 # --- FAISS Vector DB Setup ---
@@ -143,7 +114,7 @@ person_id_map = []
 
 def initialize_faiss_index():
     global faiss_index, person_id_map
-    index_path = "/tmp/faiss_index.bin"  # Use /tmp for Render ephemeral storage
+    index_path = "/tmp/faiss_index.bin"
     map_path = "/tmp/person_id_map.pkl"
     
     if os.path.exists(index_path) and os.path.exists(map_path):
@@ -224,7 +195,6 @@ class RegularUser(UserMixin):
 def load_user(user_id):
     db = SessionLocal()
     try:
-        # user_id comes as string; convert to int if possible
         try:
             uid = int(user_id)
         except Exception:
@@ -237,7 +207,6 @@ def load_user(user_id):
             user = db.query(UserModel).filter(UserModel.id == uid).first()
             if user:
                 return RegularUser(user)
-        # fallback: search by email if a string email was used previously
         admin_by_email = db.query(AdminModel).filter(AdminModel.email == str(user_id)).first()
         if admin_by_email:
             return AdminUser(admin_by_email)
@@ -261,16 +230,14 @@ def admin_required(f):
 # --- Helper functions for embeddings / face recognition ---
 def get_face_embedding(image):
     try:
-        # accept uploaded file-like objects or already-decoded images
         if hasattr(image, 'read'):
             file_bytes = np.frombuffer(image.read(), np.uint8)
             image = cv.imdecode(file_bytes, cv.IMREAD_COLOR)
         
-        # Use opencv or mtcnn instead of retinaface (compatible with TF 2.20)
         embedding_obj = DeepFace.represent(
             img_path=image,
             model_name='ArcFace',
-            detector_backend='mtcnn',  # Changed from opencv to mtcnn
+            detector_backend='opencv',
             enforce_detection=False
         )
         if not embedding_obj:
@@ -287,7 +254,6 @@ def search_face_faiss(embedding, threshold=0.6):
         return None, 0.0
     embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
     distances, indices = faiss_index.search(np.array([embedding], dtype=np.float32), k=1)
-    # distances in IndexFlatIP are inner-products; higher = more similar
     if distances[0][0] >= threshold:
         matched_name = person_id_map[indices[0][0]]
         return matched_name, float(distances[0][0])
@@ -1010,10 +976,13 @@ def mark_attendance():
             db.close()
     return jsonify({"status": "failed", "msg": "No match found"}), 404
 
-# Health check endpoint for Render
 @app.route("/health")
 def health_check():
     return jsonify({"status": "healthy", "timestamp": datetime.datetime.utcnow().isoformat()})
 
+# Add all your other routes here (login, logout, admin routes, user routes, etc.)
+# [Copy all routes from your original main.py]
+
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", debug=False, port=int(os.environ.get("PORT", 5000)))
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port, debug=False)    
