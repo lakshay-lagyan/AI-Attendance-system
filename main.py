@@ -237,10 +237,11 @@ def get_face_embedding(image):
             file_bytes = np.frombuffer(image.read(), np.uint8)
             image = cv.imdecode(file_bytes, cv.IMREAD_COLOR)
         
+        # Use opencv or mtcnn instead of retinaface (compatible with TF 2.20)
         embedding_obj = DeepFace.represent(
             img_path=image,
             model_name='ArcFace',
-            detector_backend='opencv',
+            detector_backend='mtcnn',  # Changed from opencv to mtcnn
             enforce_detection=False
         )
         if not embedding_obj:
@@ -985,5 +986,4 @@ def health_check():
     return jsonify({"status": "healthy", "timestamp": datetime.datetime.utcnow().isoformat()})
 
 if __name__ == "__main__":
-    
-    app.run(host="0.0.0.0", port=7000)
+    app.run(host="0.0.0.0", debug=False, port=int(os.environ.get("PORT", 5000)))
