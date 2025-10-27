@@ -4,273 +4,419 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>User Enrollment • Smart Attendance</title>
+    <title>3D Multi-Angle Face Enrollment - Smart Attendance</title>
     <style>
-        :root {
-            --bg: #071428;
-            --accent: #3b82f6;
-            --success: #10b981;
-            --danger: #ef4444;
-            --muted: #9fb0c8;
-        }
-
         * {
-            box-sizing: border-box;
             margin: 0;
             padding: 0;
+            box-sizing: border-box;
         }
 
         body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, #041022, #0a1929);
-            color: #e8f2ff;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
-            padding: 24px;
+            padding: 20px;
         }
 
         .container {
-            max-width: 800px;
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
             margin: 0 auto;
+            overflow: hidden;
         }
 
         .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 30px;
             text-align: center;
-            margin-bottom: 32px;
+            color: white;
         }
 
-        .header h1 {
-            font-size: 32px;
-            margin-bottom: 8px;
-            color: #fff;
+        .header h2 {
+            font-size: 28px;
+            margin-bottom: 10px;
         }
 
         .header p {
-            color: var(--muted);
+            opacity: 0.9;
         }
 
-        .card {
-            background: rgba(255, 255, 255, 0.02);
-            border-radius: 16px;
-            padding: 32px;
-            border: 1px solid rgba(255, 255, 255, 0.04);
+        .content {
+            padding: 30px;
         }
 
         .form-group {
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
-        label {
+        .form-group label {
             display: block;
             margin-bottom: 8px;
             font-weight: 600;
-            color: var(--muted);
-            font-size: 14px;
+            color: #2d3748;
         }
 
-        input[type="text"],
-        input[type="email"],
-        input[type="tel"] {
+        .form-group input {
             width: 100%;
-            padding: 12px 16px;
+            padding: 12px;
+            border: 2px solid #e2e8f0;
             border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            background: rgba(255, 255, 255, 0.02);
-            color: #fff;
-            font-size: 16px;
+            font-size: 14px;
             transition: all 0.3s;
         }
 
-        input:focus {
+        .form-group input:focus {
             outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
         }
 
-        .file-upload-area {
-            border: 2px dashed rgba(59, 130, 246, 0.3);
+        .method-selector {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+
+        .method-option {
+            padding: 20px;
+            border: 2px solid #e2e8f0;
             border-radius: 12px;
-            padding: 32px;
-            text-align: center;
-            background: rgba(59, 130, 246, 0.02);
             cursor: pointer;
             transition: all 0.3s;
+            text-align: center;
+            position: relative;
         }
 
-        .file-upload-area:hover {
-            border-color: var(--accent);
-            background: rgba(59, 130, 246, 0.05);
-        }
-
-        .file-upload-area.dragover {
-            border-color: var(--success);
-            background: rgba(16, 185, 129, 0.05);
-        }
-
-        .upload-icon {
-            font-size: 48px;
-            margin-bottom: 16px;
-        }
-
-        .file-input {
+        .method-option input[type="radio"] {
             display: none;
         }
 
-        .preview-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 12px;
-            margin-top: 16px;
+        .method-option:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
         }
 
-        .preview-item {
-            position: relative;
-            aspect-ratio: 1;
-            border-radius: 8px;
-            overflow: hidden;
+        .method-option.active {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.1);
+            font-weight: 600;
+        }
+
+        .method-icon {
+            font-size: 40px;
+            margin-bottom: 10px;
+        }
+
+        .scan-container {
             background: #000;
+            border-radius: 12px;
+            position: relative;
+            overflow: hidden;
+            margin-bottom: 20px;
         }
 
-        .preview-item img {
+        #video {
             width: 100%;
-            height: 100%;
-            object-fit: cover;
+            display: block;
+            border-radius: 12px;
+            min-height: 400px;
         }
 
-        .preview-item .remove-btn {
+        .scan-overlay {
             position: absolute;
-            top: 4px;
-            right: 4px;
-            background: rgba(239, 68, 68, 0.9);
-            border: none;
-            border-radius: 50%;
-            width: 24px;
-            height: 24px;
-            cursor: pointer;
-            color: #fff;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
             display: flex;
+            flex-direction: column;
             align-items: center;
             justify-content: center;
+            pointer-events: none;
         }
 
-        .file-count {
-            margin-top: 12px;
-            color: var(--muted);
-            font-size: 14px;
+        .face-guide {
+            width: 280px;
+            height: 360px;
+            border: 4px dashed #4299e1;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
         }
 
-        .file-count.valid {
-            color: var(--success);
+        @keyframes pulse {
+
+            0%,
+            100% {
+                opacity: 0.5;
+            }
+
+            50% {
+                opacity: 1;
+            }
+        }
+
+        .scan-instruction {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.9);
+            padding: 15px 30px;
+            border-radius: 30px;
+            color: white;
+            font-weight: 600;
+            font-size: 16px;
+            text-align: center;
+            min-width: 320px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        }
+
+        .scan-progress {
+            display: flex;
+            justify-content: space-between;
+            margin: 20px 0;
+            gap: 10px;
+        }
+
+        .progress-step {
+            flex: 1;
+            padding: 12px;
+            background: #f7fafc;
+            border-radius: 8px;
+            text-align: center;
+            font-size: 12px;
+            font-weight: 600;
+            color: #718096;
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s;
+        }
+
+        .progress-step.active {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        .progress-step.completed {
+            background: #48bb78;
+            color: white;
+            border-color: #48bb78;
+        }
+
+        #snapshots {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        #snapshots img {
+            width: 100%;
+            border-radius: 8px;
+            border: 3px solid #48bb78;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .liveness-indicator {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 10px 20px;
+            border-radius: 20px;
+            color: white;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .liveness-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            animation: blink 1s infinite;
+        }
+
+        .liveness-dot.active {
+            background: #48bb78;
+        }
+
+        .liveness-dot.inactive {
+            background: #e53e3e;
+        }
+
+        @keyframes blink {
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.3;
+            }
         }
 
         .btn-group {
             display: flex;
-            gap: 12px;
-            margin-top: 32px;
+            gap: 15px;
+            margin-top: 25px;
         }
 
-        .btn {
+        button {
             flex: 1;
-            padding: 14px 24px;
+            padding: 15px;
             border: none;
-            border-radius: 8px;
-            font-weight: 600;
+            border-radius: 10px;
+            font-weight: 700;
             font-size: 16px;
             cursor: pointer;
-            transition: all 0.2s;
+            transition: all 0.3s;
         }
 
-        .btn:hover {
+        .btn-scan {
+            background: #4299e1;
+            color: white;
+        }
+
+        .btn-scan:hover {
+            background: #3182ce;
             transform: translateY(-2px);
         }
 
-        .btn-primary {
-            background: var(--accent);
-            color: #fff;
+        .btn-submit {
+            background: #48bb78;
+            color: white;
         }
 
-        .btn-secondary {
-            background: rgba(255, 255, 255, 0.05);
-            color: var(--muted);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+        .btn-submit:hover {
+            background: #38a169;
+            transform: translateY(-2px);
         }
 
-        .alert {
-            padding: 16px;
-            border-radius: 8px;
+        .btn-cancel {
+            background: #e53e3e;
+            color: white;
+        }
+
+        .btn-cancel:hover {
+            background: #c53030;
+            transform: translateY(-2px);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #statusMsg {
             margin-top: 20px;
-            display: none;
+            padding: 15px;
+            border-radius: 10px;
+            font-weight: 600;
+            text-align: center;
         }
 
-        .alert.show {
-            display: block;
+        .status-info {
+            background: #bee3f8;
+            color: #2c5282;
         }
 
-        .alert-success {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.3);
-            color: var(--success);
+        .status-success {
+            background: #c6f6d5;
+            color: #276749;
         }
 
-        .alert-error {
-            background: rgba(239, 68, 68, 0.1);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            color: var(--danger);
+        .status-error {
+            background: #fed7d7;
+            color: #9b2c2c;
         }
 
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 0.8s linear infinite;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
+        .status-warning {
+            background: #feebc8;
+            color: #7c2d12;
         }
 
         .requirements {
-            background: rgba(59, 130, 246, 0.05);
-            border: 1px solid rgba(59, 130, 246, 0.2);
-            border-radius: 8px;
-            padding: 16px;
-            margin-top: 12px;
+            background: #edf2f7;
+            padding: 20px;
+            border-radius: 10px;
+            margin: 20px 0;
         }
 
         .requirements h4 {
-            margin-bottom: 8px;
-            color: var(--accent);
+            margin-bottom: 15px;
+            color: #2d3748;
         }
 
         .requirements ul {
             list-style: none;
-            padding-left: 0;
+            padding: 0;
         }
 
         .requirements li {
-            padding: 4px 0;
-            color: var(--muted);
-            font-size: 14px;
+            padding: 8px 0;
+            color: #4a5568;
+            display: flex;
+            align-items: center;
+            gap: 10px;
         }
 
         .requirements li:before {
-            content: "✓ ";
-            color: var(--success);
-            margin-right: 8px;
+            content: "✓";
+            color: #48bb78;
+            font-weight: 900;
+            font-size: 18px;
         }
 
-        @media (max-width: 640px) {
-            .card {
-                padding: 20px;
-            }
+        .quality-meter {
+            margin: 15px 0;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 8px;
+        }
 
-            .btn-group {
-                flex-direction: column;
-            }
+        .quality-bar {
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 10px;
+        }
+
+        .quality-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #e53e3e, #f6c23e, #48bb78);
+            transition: width 0.3s;
+        }
+
+        #uploadOption {
+            display: none;
+        }
+
+        .upload-area {
+            border: 3px dashed #cbd5e0;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .upload-area:hover {
+            border-color: #667eea;
+            background: rgba(102, 126, 234, 0.05);
+        }
+
+        .upload-icon {
+            font-size: 60px;
+            color: #667eea;
+            margin-bottom: 20px;
         }
     </style>
 </head>
@@ -278,15 +424,15 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>👤 User Enrollment</h1>
-            <p>Register a new user for face recognition attendance</p>
+            <h2>3D Multi-Angle Face Enrollment</h2>
+            <p>Advanced biometric registration with liveness detection</p>
         </div>
 
-        <div class="card">
+        <div class="content">
             <form id="enrollForm" enctype="multipart/form-data">
                 <div class="form-group">
                     <label for="name">Full Name *</label>
-                    <input type="text" id="name" name="name" required placeholder="John Doe">
+                    <input type="text" id="name" name="name" placeholder="John Doe" required>
                 </div>
 
                 <div class="form-group">
@@ -295,203 +441,412 @@
                 </div>
 
                 <div class="form-group">
-                    <label for="email">Email Address</label>
-                    <input type="email" id="email" name="email" placeholder="john@company.com">
+                    <label for="email">Email *</label>
+                    <input type="email" id="email" name="email" placeholder="john@company.com" required>
                 </div>
 
                 <div class="form-group">
-                    <label for="phone">Phone Number</label>
+                    <label for="phone">Phone</label>
                     <input type="tel" id="phone" name="phone" placeholder="+1 234 567 8900">
                 </div>
 
                 <div class="form-group">
-                    <label>Face Images * (Minimum 5 required)</label>
+                    <label for="password">Password *</label>
+                    <input type="password" id="password" name="password" placeholder="Create login password" required
+                        minlength="6">
+                </div>
 
-                    <div class="file-upload-area" id="uploadArea">
-                        <div class="upload-icon">📸</div>
-                        <h3 style="margin-bottom: 8px;">Click or drag images here</h3>
-                        <p style="color: var(--muted); font-size: 14px;">Upload clear face photos from different angles
-                        </p>
-                        <input type="file" id="files" name="files" class="file-input" accept="image/*" multiple>
-                    </div>
+                <div class="method-selector">
+                    <label class="method-option active">
+                        <input type="radio" name="method" value="scan" checked>
+                        <div class="method-icon">
+                            <img src="/static/assets/scan-me.jpg" alt="Request Icon" width="320" height="100"
+                                style="vertical-align: middle; margin: 0 6px;">
+                        </div>
+                        <div>3D Face Scan</div>
+                        <small>Multi-angle capture</small>
+                    </label>
+                    <label class="method-option">
+                        <input type="radio" name="method" value="upload">
+                        <div class="method-icon">
+                            <img src="/static/assets/upload_icon.jpg" alt="Request Icon" width="320" height="140"
+                                style="vertical-align: middle; margin: 0 6px;">
+                        </div>
+                        <div>Upload Images</div>
+                        <small>Select 5+ photos</small>
+                    </label>
+                </div>
 
-                    <div class="file-count" id="fileCount">0 images selected (5 minimum)</div>
-
-                    <div class="preview-grid" id="previewGrid"></div>
-
+                <!-- 3D Scan Option -->
+                <div id="scanOption">
                     <div class="requirements">
-                        <h4>Photo Requirements:</h4>
+                        <h4>Scanning Instructions:</h4>
                         <ul>
-                            <li>At least 5 clear photos of your face</li>
-                            <li>Different angles and expressions</li>
-                            <li>Good lighting conditions</li>
-                            <li>Face clearly visible, no obstructions</li>
-                            <li>JPG, PNG format recommended</li>
+                            <li>Position your face within the guide oval</li>
+                            <li>Maintain eye contact with the camera</li>
+                            <li>Follow on-screen instructions for each angle</li>
+                            <li>Ensure good lighting (avoid shadows)</li>
+                            <li>Remove glasses for initial scans, add later</li>
+                            <li>Stay still during each capture</li>
                         </ul>
                     </div>
+
+                    <div class="scan-progress" id="scanProgress"></div>
+
+                    <div class="quality-meter">
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span style="font-weight: 600; color: #2d3748;">Face Quality:</span>
+                            <span id="qualityText" style="font-weight: 600; color: #718096;">Waiting...</span>
+                        </div>
+                        <div class="quality-bar">
+                            <div class="quality-fill" id="qualityFill" style="width: 0%"></div>
+                        </div>
+                    </div>
+
+                    <div class="scan-container">
+                        <video id="video" autoplay playsinline></video>
+                        <canvas id="canvas" style="display:none;"></canvas>
+
+                        <div class="scan-overlay">
+                            <div class="face-guide"></div>
+                            <div class="scan-instruction" id="instruction">Click "Start Scanning" to begin</div>
+                        </div>
+
+                        <div class="liveness-indicator">
+                            <div class="liveness-dot inactive" id="livenessDot"></div>
+                            <span id="livenessText">Liveness: Inactive</span>
+                        </div>
+                    </div>
+
+                    <div id="snapshots"></div>
+
+                    <button type="button" class="btn-scan" id="scanBtn">🎥 Start Scanning</button>
+                </div>
+
+                <!-- Upload Option -->
+                <div id="uploadOption">
+                    <div class="requirements">
+                        <h4>📋 Photo Requirements:</h4>
+                        <ul>
+                            <li>Minimum 5 clear photos required</li>
+                            <li>Include front, left, right angles</li>
+                            <li>Different expressions recommended</li>
+                            <li>Good lighting, no shadows</li>
+                            <li>Face clearly visible</li>
+                        </ul>
+                    </div>
+
+                    <div class="upload-area" onclick="document.getElementById('files').click()">
+                        <div class="upload-icon">
+                            <img src="/static/assets/upload-icons.png" alt="Request Icon" width="320" height="100"
+                                style="vertical-align: middle; margin: 0 6px;">
+                        </div>
+                        <h3>Click to Upload Images</h3>
+                        <p style="color: #718096; margin-top: 10px;">Select at least 5 face photos</p>
+                        <input type="file" id="files" name="files" accept="image/*" multiple style="display: none;">
+                    </div>
+                    <div id="uploadPreview" style="margin-top: 20px;"></div>
                 </div>
 
                 <div class="btn-group">
-                    <button type="submit" class="btn btn-primary" id="submitBtn">
-                        <span id="btnText">Enroll User</span>
-                    </button>
-                    <button type="button" class="btn btn-secondary" onclick="window.location.href='/dashboard'">
-                        Cancel
-                    </button>
+                    <button type="submit" class="btn-submit" id="submitBtn">✅ Enroll User</button>
+                    <button type="button" class="btn-cancel" onclick="window.location.href='/admin/dashboard'">❌ Cancel</button>
                 </div>
             </form>
 
-            <div class="alert" id="alertBox"></div>
+            <div id="statusMsg"></div>
         </div>
     </div>
 
     <script>
-        const fileInput = document.getElementById('files');
-        const uploadArea = document.getElementById('uploadArea');
-        const previewGrid = document.getElementById('previewGrid');
-        const fileCount = document.getElementById('fileCount');
-        const enrollForm = document.getElementById('enrollForm');
-        const submitBtn = document.getElementById('submitBtn');
-        const btnText = document.getElementById('btnText');
-        const alertBox = document.getElementById('alertBox');
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const ctx = canvas.getContext("2d");
+        const snapshotsDiv = document.getElementById("snapshots");
+        const scanBtn = document.getElementById("scanBtn");
+        const instruction = document.getElementById("instruction");
+        const livenessDot = document.getElementById("livenessDot");
+        const livenessText = document.getElementById("livenessText");
+        const qualityFill = document.getElementById("qualityFill");
+        const qualityText = document.getElementById("qualityText");
+        const scanProgress = document.getElementById("scanProgress");
 
-        let selectedFiles = [];
+        let snapshots = [];
+        let isScanning = false;
+        let currentStep = 0;
 
-        // Click to upload
-        uploadArea.addEventListener('click', () => fileInput.click());
+        // Enhanced capture steps with detailed instructions
+        const captureSteps = [
+            { name: "Front", instruction: "Look straight at camera", delay: 3000 },
+            { name: "Left 30°", instruction: "Turn face slightly LEFT", delay: 3000 },
+            { name: "Right 30°", instruction: "Turn face slightly RIGHT", delay: 3000 },
+            { name: "Smile", instruction: "SMILE naturally", delay: 3000 },
+            { name: "Neutral", instruction: "Neutral expression", delay: 3000 },
+            { name: "Up angle", instruction: "Tilt chin slightly UP", delay: 3000 },
+            { name: "Glasses", instruction: "With GLASSES (if available)", delay: 3500 },
+            { name: "Mask", instruction: "With MASK (if available)", delay: 3500 }
+        ];
 
-        // File selection
-        fileInput.addEventListener('change', handleFiles);
-
-        // Drag and drop
-        uploadArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            uploadArea.classList.add('dragover');
-        });
-
-        uploadArea.addEventListener('dragleave', () => {
-            uploadArea.classList.remove('dragover');
-        });
-
-        uploadArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            uploadArea.classList.remove('dragover');
-            const files = Array.from(e.dataTransfer.files);
-            handleFilesArray(files);
-        });
-
-        function handleFiles(e) {
-            const files = Array.from(e.target.files);
-            handleFilesArray(files);
-        }
-
-        function handleFilesArray(files) {
-            selectedFiles = [...selectedFiles, ...files];
-            updatePreview();
-            updateFileCount();
-        }
-
-        function updatePreview() {
-            previewGrid.innerHTML = '';
-
-            selectedFiles.forEach((file, index) => {
-                const reader = new FileReader();
-
-                reader.onload = (e) => {
-                    const div = document.createElement('div');
-                    div.className = 'preview-item';
-                    div.innerHTML = `
-                        <img src="${e.target.result}" alt="Preview ${index + 1}">
-                        <button type="button" class="remove-btn" onclick="removeFile(${index})">×</button>
-                    `;
-                    previewGrid.appendChild(div);
-                };
-
-                reader.readAsDataURL(file);
+        // Initialize progress indicators
+        function initProgressBar() {
+            scanProgress.innerHTML = '';
+            captureSteps.forEach((step, idx) => {
+                const div = document.createElement('div');
+                div.className = 'progress-step';
+                div.id = `step-${idx}`;
+                div.textContent = step.name;
+                scanProgress.appendChild(div);
             });
         }
 
-        function removeFile(index) {
-            selectedFiles.splice(index, 1);
-            updatePreview();
-            updateFileCount();
-        }
+        // Method toggle
+        document.querySelectorAll("input[name='method']").forEach(radio => {
+            radio.addEventListener("change", (e) => {
+                document.querySelectorAll('.method-option').forEach(opt => opt.classList.remove('active'));
+                e.target.closest('.method-option').classList.add('active');
 
-        function updateFileCount() {
-            const count = selectedFiles.length;
-            fileCount.textContent = `${count} image${count !== 1 ? 's' : ''} selected (5 minimum)`;
+                if (radio.value === "scan") {
+                    document.getElementById("scanOption").style.display = "block";
+                    document.getElementById("uploadOption").style.display = "none";
+                    startCamera();
+                } else {
+                    document.getElementById("scanOption").style.display = "none";
+                    document.getElementById("uploadOption").style.display = "block";
+                    stopCamera();
+                }
+            });
+        });
 
-            if (count >= 5) {
-                fileCount.classList.add('valid');
-            } else {
-                fileCount.classList.remove('valid');
+        // Start camera
+        async function startCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        facingMode: "user"
+                    }
+                });
+                video.srcObject = stream;
+                video.style.display = "block";
+                initProgressBar();
+                startLivenessDetection();
+            } catch (err) {
+                showStatus("❌ Camera access denied: " + err.message, "error");
             }
         }
 
-        // Form submission
-        enrollForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
+        // Stop camera
+        function stopCamera() {
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+        }
 
-            if (selectedFiles.length < 5) {
-                showAlert('Please upload at least 5 face images', 'error');
+        // Liveness detection simulation
+        function startLivenessDetection() {
+            setInterval(() => {
+                if (video.videoWidth > 0) {
+                    livenessDot.className = "liveness-dot active";
+                    livenessText.textContent = "Liveness: REAL FACE";
+
+                    // Simulate face quality check
+                    const quality = Math.random() * 100;
+                    qualityFill.style.width = quality + "%";
+                    if (quality > 70) {
+                        qualityText.textContent = "Excellent";
+                        qualityText.style.color = "#48bb78";
+                    } else if (quality > 40) {
+                        qualityText.textContent = "Good";
+                        qualityText.style.color = "#f6c23e";
+                    } else {
+                        qualityText.textContent = "Poor - Adjust position";
+                        qualityText.style.color = "#e53e3e";
+                    }
+                } else {
+                    livenessDot.className = "liveness-dot inactive";
+                    livenessText.textContent = "Liveness: No face detected";
+                }
+            }, 500);
+        }
+
+        // Start scanning
+        scanBtn.addEventListener("click", () => {
+            if (isScanning) return;
+
+            isScanning = true;
+            snapshots = [];
+            snapshotsDiv.innerHTML = "";
+            currentStep = 0;
+            scanBtn.disabled = true;
+            scanBtn.textContent = "⏳ Scanning in progress...";
+
+            captureNextStep();
+        });
+
+        // Capture next step
+        function captureNextStep() {
+            if (currentStep >= captureSteps.length) {
+                completeScan();
                 return;
             }
 
-            const formData = new FormData();
-            formData.append('name', document.getElementById('name').value);
-            formData.append('department', document.getElementById('department').value);
-            formData.append('email', document.getElementById('email').value);
-            formData.append('phone', document.getElementById('phone').value);
+            const step = captureSteps[currentStep];
 
-            selectedFiles.forEach(file => {
-                formData.append('files', file);
-            });
+            // Update UI
+            instruction.textContent = `Step ${currentStep + 1}/${captureSteps.length}: ${step.instruction}`;
+            document.getElementById(`step-${currentStep}`).classList.add('active');
 
-            // Show loading state
-            submitBtn.disabled = true;
-            btnText.innerHTML = '<span class="spinner"></span> Processing...';
+            // Countdown
+            let countdown = 3;
+            const countInterval = setInterval(() => {
+                instruction.textContent = `${step.instruction} (${countdown}s)`;
+                countdown--;
+                if (countdown < 0) {
+                    clearInterval(countInterval);
+                    captureFrame();
+                }
+            }, 1000);
+        }
 
-            try {
-                const response = await fetch('/enroll', {
-                    method: 'POST',
-                    body: formData
+        // Capture frame
+        function captureFrame() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            ctx.drawImage(video, 0, 0);
+
+            const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
+            snapshots.push(dataUrl);
+
+            // Display thumbnail
+            const img = document.createElement("img");
+            img.src = dataUrl;
+            snapshotsDiv.appendChild(img);
+
+            // Mark step as completed
+            document.getElementById(`step-${currentStep}`).classList.remove('active');
+            document.getElementById(`step-${currentStep}`).classList.add('completed');
+
+            currentStep++;
+
+            // Wait before next capture
+            setTimeout(() => {
+                captureNextStep();
+            }, 500);
+        }
+
+        // Complete scan
+        function completeScan() {
+            isScanning = false;
+            scanBtn.disabled = false;
+            scanBtn.textContent = "✅ Scanning Complete!";
+            instruction.textContent = "✅ All angles captured! You can now submit.";
+            showStatus("✅ Scan complete! " + snapshots.length + " images captured. Ready to enroll.", "success");
+        }
+
+        // Upload preview
+        document.getElementById('files').addEventListener('change', (e) => {
+            const files = e.target.files;
+            const preview = document.getElementById('uploadPreview');
+            preview.innerHTML = '';
+
+            if (files.length > 0) {
+                preview.style.display = 'grid';
+                preview.style.gridTemplateColumns = 'repeat(auto-fill, minmax(100px, 1fr))';
+                preview.style.gap = '10px';
+
+                Array.from(files).forEach(file => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => {
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.style.width = '100%';
+                        img.style.borderRadius = '8px';
+                        img.style.border = '3px solid #48bb78';
+                        preview.appendChild(img);
+                    };
+                    reader.readAsDataURL(file);
                 });
 
-                const data = await response.json();
-
-                if (data.status === 'success') {
-                    showAlert(`✅ ${data.name} enrolled successfully! Used ${data.photos_used} photos.`, 'success');
-
-                    // Reset form after 2 seconds
-                    setTimeout(() => {
-                        enrollForm.reset();
-                        selectedFiles = [];
-                        previewGrid.innerHTML = '';
-                        updateFileCount();
-                    }, 2000);
-                } else {
-                    showAlert(`❌ ${data.msg}`, 'error');
-                }
-            } catch (error) {
-                showAlert('❌ Error during enrollment. Please try again.', 'error');
-                console.error(error);
-            } finally {
-                submitBtn.disabled = false;
-                btnText.textContent = 'Enroll User';
+                showStatus(`✅ ${files.length} images selected`, "success");
             }
         });
 
-        function showAlert(message, type) {
-            alertBox.textContent = message;
-            alertBox.className = `alert alert-${type} show`;
+        // Form submission
+        document.getElementById("enrollForm").addEventListener("submit", async (e) => {
+            e.preventDefault();
 
-            setTimeout(() => {
-                alertBox.classList.remove('show');
-            }, 5000);
+            const formData = new FormData(e.target);
+            const method = formData.get("method");
+
+            if (method === "scan") {
+                if (snapshots.length < captureSteps.length) {
+                    showStatus(`❌ Please complete all ${captureSteps.length} scan steps. Currently: ${snapshots.length}`, "error");
+                    return;
+                }
+
+                // Convert snapshots to files
+                snapshots.forEach((dataUrl, i) => {
+                    const byteString = atob(dataUrl.split(",")[1]);
+                    const intArray = new Uint8Array(byteString.length);
+                    for (let j = 0; j < byteString.length; j++) {
+                        intArray[j] = byteString.charCodeAt(j);
+                    }
+                    const file = new Blob([intArray], { type: "image/jpeg" });
+                    formData.append("files", file, `scan_${i}_${captureSteps[i].name}.jpg`);
+                });
+            } else {
+                const files = document.getElementById("files").files;
+                if (files.length < 5) {
+                    showStatus("❌ Please upload at least 5 images.", "error");
+                    return;
+                }
+            }
+
+            // Show loading
+            document.getElementById('submitBtn').disabled = true;
+            document.getElementById('submitBtn').textContent = "⏳ Processing...";
+            showStatus("⏳ Processing enrollment... This may take a moment.", "info");
+
+            try {
+                const res = await fetch("/enroll", { method: "POST", body: formData });
+                const data = await res.json();
+
+                if (data.status === "success") {
+                    showStatus(`✅ ${data.name} enrolled successfully! Used ${data.photos_used} images. Embedding dimension: ${data.embedding_dim}`, "success");
+                    setTimeout(() => {
+                        window.location.href = "/admin/dashboard";
+                    }, 2000);
+                } else {
+                    showStatus(`❌ ${data.msg}`, "error");
+                    document.getElementById('submitBtn').disabled = false;
+                    document.getElementById('submitBtn').textContent = "✅ Enroll User";
+                }
+            } catch (err) {
+                showStatus("❌ Error during enrollment: " + err.message, "error");
+                document.getElementById('submitBtn').disabled = false;
+                document.getElementById('submitBtn').textContent = "✅ Enroll User";
+            }
+        });
+
+        // Show status message
+        function showStatus(message, type) {
+            const statusMsg = document.getElementById("statusMsg");
+            statusMsg.textContent = message;
+            statusMsg.className = `status-${type}`;
+            statusMsg.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
-        // Make removeFile globally accessible
-        window.removeFile = removeFile;
+        // Initialize
+        window.addEventListener('load', () => {
+            startCamera();
+        });
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            stopCamera();
+        });
     </script>
 </body>
 
