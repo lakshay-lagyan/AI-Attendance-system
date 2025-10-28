@@ -1,17 +1,10 @@
 services:
-  # PostgreSQL Database (create first)
-  - type: pserv
-    name: face-recognition-db
-    plan: free
-    databaseName: attendance_db
-    user: attendance_user
-
-  # Web Service
+  # Web Service using Docker
   - type: web
     name: face-recognition-app
     runtime: docker
-    plan: free
     region: oregon
+    plan: free
     branch: main
     dockerfilePath: ./Dockerfile
     envVars:
@@ -19,10 +12,8 @@ services:
         generateValue: true
       - key: CREATE_ADMIN_SECRET
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: face-recognition-db
-          property: connectionString
+      - key: MONGODB_URI
+        value: mongodb+srv://attenXdb:<x1NHk8oKm8rNnJtU>@facedb.ofzetzr.mongodb.net/?appName=facedb
       - key: PORT
         value: "10000"
       - key: ADMIN_EMAIL

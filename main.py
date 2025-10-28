@@ -1,233 +1,129 @@
-import os
-import datetime
-import uuid
-import base64
+from flask import Flask, render_template, request, jsonify, Response, redirect, url_for, flash, session
+from pymongo import MongoClient
+from deepface import DeepFace
+import numpy as np
+import mediapipe as mp
+import cv2 as cv
 import pickle
-import traceback
+import datetime
+import os
+import faiss
+import base64
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
 from functools import wraps
 
-import numpy as np
-import cv2 as cv
-from deepface import DeepFace
-from werkzeug.security import generate_password_hash, check_password_hash
-from flask import Flask, render_template, request, jsonify, Response, redirect, url_for, flash
-from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+from function import generate_camera_stream, get_face_embedding, continuous_learning_update, create_3d_template, extract_multi_vector_embeddings, ensemble_matching, search_face_faiss, rebuild_faiss_index
 
-# SQLAlchemy
-from sqlalchemy import (
-    create_engine, Column, Integer, String, DateTime, LargeBinary, Text, Float, func, text, Index
-)
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, scoped_session
-from sqlalchemy.dialects.postgresql import JSONB, UUID
-from sqlalchemy.exc import IntegrityError
-
-# Local helper functions (must be implemented in function.py)
-from function import (
-    generate_camera_stream, get_face_embedding, continuous_learning_update,
-    create_3d_template, extract_multi_vector_embeddings, ensemble_matching,
-    search_face_faiss, rebuild_faiss_index, initialize_faiss_index, faiss_index
-)
-
-# ---------- Flask app ----------
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "replace_this_with_a_real_secret")
 
-# ---------- Database setup (PostgreSQL + SQLAlchemy) ----------
-DATABASE_URL = os.environ.get("DATABASE_URL", "postgresql://postgres:lakshaybazida@localhost:5432/mydb")
+# MONGODB
+MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+client = MongoClient(MONGODB_URI)
 
-engine = create_engine(DATABASE_URL, echo=False, pool_pre_ping=True)
-SessionLocal = scoped_session(sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False))
-Base = declarative_base()
+transactional_db = client["transactional_db"]
+attendance_col = transactional_db["attendance"]
 
-# ---------- Models ----------
-class Admin(Base):
-    __tablename__ = "admins"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(Text, nullable=False)
-    profile_image = Column(Text, default="")
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, nullable=True, server_default=func.now(), onupdate=datetime.datetime.utcnow)
+core = client['secure_db']
+persons_col = core["persons"]
+profile_col = core["profile"]
+admins_col = core["admins"]
+users_col = core["users"]  
+enrollment_requests_col = core["enrollment_requests"]
 
-class User(Base):
-    __tablename__ = "users"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False, index=True)
-    email = Column(String(255), unique=True, nullable=False, index=True)
-    password_hash = Column(Text, nullable=False)
-    department = Column(String(255), default="")
-    phone = Column(String(50), default="")
-    profile_image = Column(Text, default="")
-    status = Column(String(20), default="active", index=True)
-    created_at = Column(DateTime, default=datetime.datetime.utcnow, nullable=False)
-    updated_at = Column(DateTime, nullable=True, server_default=func.now(), onupdate=datetime.datetime.utcnow)
+# FAISS Vector Database Setup
+EMBEDDING_DIM = 512
+faiss_index = None
+person_id_map = []
 
-class Person(Base):
-    __tablename__ = "persons"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), unique=True, nullable=False, index=True)
-    embedding = Column(LargeBinary, nullable=False)
-    embedding_dim = Column(Integer, nullable=False)
-    photos_count = Column(Integer, default=0)
-    status = Column(String(20), default="active", index=True)
-    template_type = Column(String(50), default="standard")
-    avg_quality = Column(Float, default=0.0)
-    update_count = Column(Integer, default=0)
-    enrollment_date = Column(DateTime, default=datetime.datetime.utcnow)
-    last_updated = Column(DateTime, nullable=True, server_default=func.now(), onupdate=datetime.datetime.utcnow)
+def initialize_faiss_index():
+    global faiss_index, person_id_map
+    index_path = "faiss_index.bin"
+    map_path = "person_id_map.pkl"
+    
+    if os.path.exists(index_path) and os.path.exists(map_path):
+        faiss_index = faiss.read_index(index_path)
+        with open(map_path, 'rb') as f:
+            person_id_map = pickle.load(f)
+        print(f"Loaded FAISS index with {faiss_index.ntotal} faces")
+    else:
+        faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+        person_id_map = []
+        print("Created new FAISS index")
 
-class Profile(Base):
-    __tablename__ = "profiles"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), unique=True, nullable=False, index=True)
-    department = Column(String(255), default="")
-    email = Column(String(255), nullable=False, index=True)
-    phone = Column(String(50), default="")
-    profile_image = Column(Text, default="")
-    registered_at = Column(DateTime, default=datetime.datetime.utcnow)
+def save_faiss_index():
+    faiss.write_index(faiss_index, "faiss_index.bin")
+    with open("person_id_map.pkl", 'wb') as f:
+        pickle.dump(person_id_map, f)
 
-class EnrollmentRequest(Base):
-    __tablename__ = "enrollment_requests"
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    name = Column(String(255), nullable=False)
-    email = Column(String(255), nullable=False, index=True)
-    phone = Column(String(50), default="")
-    password_hash = Column(Text, nullable=False)
-    images = Column(JSONB, nullable=False)
-    status = Column(String(20), default="pending", index=True)
-    submitted_at = Column(DateTime, default=datetime.datetime.utcnow, index=True)
-    processed_at = Column(DateTime, nullable=True)
-    processed_by = Column(String(255), nullable=True)
-    rejection_reason = Column(Text, nullable=True)
 
-class Attendance(Base):
-    __tablename__ = "attendance"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    name = Column(String(255), nullable=False, index=True)
-    timestamp = Column(DateTime, default=datetime.datetime.utcnow, index=True)
-    confidence = Column(Float, default=0.0)
-    template_type = Column(String(50), default="standard")
-    continuous_learning_active = Column(String(10), default="false")
-    method = Column(String(20), default="auto")
 
-# Indexes
-Index("ix_profiles_email", Profile.email)
-Index("ix_enrollment_requests_email", EnrollmentRequest.email)
-
-# ---------- Create tables (safe for new tables) ----------
-Base.metadata.create_all(bind=engine)
-
-# ---------- Schema fixes (idempotent quick-migrations) ----------
-def apply_schema_fixes():
-    """
-    Apply idempotent ALTER TABLE statements for known missing columns.
-    Safe to run multiple times.
-    """
-    sql_statements = [
-        "ALTER TABLE admins ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITHOUT TIME ZONE;",
-        "ALTER TABLE users ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP WITHOUT TIME ZONE;",
-        "ALTER TABLE persons ADD COLUMN IF NOT EXISTS last_updated TIMESTAMP WITHOUT TIME ZONE;"
-    ]
-
-    with engine.begin() as conn:
-        for stmt in sql_statements:
-            try:
-                conn.execute(text(stmt))
-            except Exception as e:
-                # don't hard-fail startup; log and continue
-                print(f"[SchemaFix] Warning running: {stmt} -> {e}")
-
-        # Backfill nulls and set DB default
-        try:
-            conn.execute(text("UPDATE admins SET updated_at = COALESCE(updated_at, created_at) WHERE updated_at IS NULL;"))
-            conn.execute(text("ALTER TABLE admins ALTER COLUMN updated_at SET DEFAULT now();"))
-        except Exception:
-            pass
-
-        try:
-            conn.execute(text("UPDATE users SET updated_at = COALESCE(updated_at, created_at) WHERE updated_at IS NULL;"))
-            conn.execute(text("ALTER TABLE users ALTER COLUMN updated_at SET DEFAULT now();"))
-        except Exception:
-            pass
-
-        try:
-            conn.execute(text("UPDATE persons SET last_updated = COALESCE(last_updated, enrollment_date) WHERE last_updated IS NULL;"))
-            conn.execute(text("ALTER TABLE persons ALTER COLUMN last_updated SET DEFAULT now();"))
-        except Exception:
-            pass
-
-    print("[SchemaFix] Completed (idempotent).")
-
-apply_schema_fixes()
-
-# Initialize FAISS (user function) 
-try:
-    initialize_faiss_index()
-except Exception as e:
-    print("[FAISS init error]", e)
-
-# Login manager 
+# Login manager
 login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
 class AdminUser(UserMixin):
-    def __init__(self, admin_obj):
-        self.id = str(admin_obj.id)
-        self.email = admin_obj.email
-        self.name = admin_obj.name
+    def __init__(self, doc):
+        self.doc = doc
+        self.id = str(doc.get("_id"))
+        self.email = doc.get("email")
+        self.name = doc.get("name", "Admin")
         self.role = "admin"
-        self.profile_image = admin_obj.profile_image or ""
+        self.profile_image = doc.get("profile_image", "")
 
 class RegularUser(UserMixin):
-    def __init__(self, user_obj):
-        self.id = str(user_obj.id)
-        self.email = user_obj.email
-        self.name = user_obj.name
+    def __init__(self, doc):
+        self.doc = doc
+        self.id = str(doc.get("_id"))
+        self.email = doc.get("email")
+        self.name = doc.get("name", "User")
         self.role = "user"
-        self.department = user_obj.department or ""
-        self.profile_image = user_obj.profile_image or ""
-        self.status = user_obj.status or "active"
+        self.department = doc.get("department", "")
+        self.profile_image = doc.get("profile_image", "")
+        self.status = doc.get("status", "active")
 
 @login_manager.user_loader
 def load_user(user_id):
-    db = SessionLocal()
+    # Try admin first
+    doc = admins_col.find_one({"_id": user_id})
+    if doc:
+        return AdminUser(doc)
+    
+    # Try regular user
+    doc = users_col.find_one({"_id": user_id})
+    if doc:
+        return RegularUser(doc)
+    
+    # Fallback with ObjectId
+    from bson.objectid import ObjectId
     try:
-        try:
-            uid = uuid.UUID(user_id)
-        except Exception:
-            return None
-
-        admin = db.query(Admin).filter(Admin.id == uid).first()
-        if admin:
-            return AdminUser(admin)
-
-        user = db.query(User).filter(User.id == uid).first()
-        if user:
-            return RegularUser(user)
-    except Exception:
+        doc = admins_col.find_one({"_id": ObjectId(user_id)})
+        if doc:
+            return AdminUser(doc)
+        doc = users_col.find_one({"_id": ObjectId(user_id)})
+        if doc:
+            return RegularUser(doc)
+    except:
         pass
-    finally:
-        db.close()
     return None
 
 def admin_required(f):
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
-        if getattr(current_user, "role", None) != 'admin':
-            flash('Access denied. Admin privileges required.', 'danger')
+        if current_user.role != 'admin':
+            flash('Access denied. Admin privileges required.', 'oops!')
             return redirect(url_for('user_dashboard'))
         return f(*args, **kwargs)
     return decorated_function
 
-# -------------------- Routes --------------------
+# --- Authentication Routes ---
 @app.route("/")
 def index():
     if current_user.is_authenticated:
-        if getattr(current_user, "role", None) == 'admin':
+        if current_user.role == 'admin':
             return redirect(url_for("admin_dashboard"))
         return redirect(url_for("user_dashboard"))
     return redirect(url_for("login"))
@@ -235,44 +131,45 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        if getattr(current_user, "role", None) == 'admin':
+        if current_user.role == 'admin':
             return redirect(url_for("admin_dashboard"))
         return redirect(url_for("user_dashboard"))
-
+    
     if request.method == "GET":
         return render_template("login.html")
-
+    
     email = request.form.get("email", "").strip().lower()
     password = request.form.get("password", "")
     remember = request.form.get("remember") == "on"
-
+    
     if not email or not password:
         flash("Email and password required.", "danger")
         return redirect(url_for("login"))
-
-    db = SessionLocal()
-    try:
-        admin = db.query(Admin).filter(Admin.email == email).first()
-        if admin and check_password_hash(admin.password_hash, password):
+    
+    # Check admin
+    admin = admins_col.find_one({"email": email})
+    if admin:
+        hashed = admin.get("password_hash")
+        if hashed and check_password_hash(hashed, password):
             user = AdminUser(admin)
             login_user(user, remember=remember)
             return redirect(url_for("admin_dashboard"))
-
-        user_obj = db.query(User).filter(User.email == email).first()
-        if user_obj:
-            if user_obj.status == "blocked":
-                flash("Your account has been blocked. Contact admin.", "danger")
-                return redirect(url_for("login"))
-
-            if check_password_hash(user_obj.password_hash, password):
-                user = RegularUser(user_obj)
-                login_user(user, remember=remember)
-                return redirect(url_for("user_dashboard"))
-
-        flash("Invalid credentials.", "danger")
-        return redirect(url_for("login"))
-    finally:
-        db.close()
+    
+    # Check regular user
+    user_doc = users_col.find_one({"email": email})
+    if user_doc:
+        if user_doc.get("status") == "blocked":
+            flash("Your account has been blocked. Contact admin.", "danger")
+            return redirect(url_for("login"))
+        
+        hashed = user_doc.get("password_hash")
+        if hashed and check_password_hash(hashed, password):
+            user = RegularUser(user_doc)
+            login_user(user, remember=remember)
+            return redirect(url_for("user_dashboard"))
+    
+    flash("Invalid credentials.", "danger")
+    return redirect(url_for("login"))
 
 @app.route("/logout")
 @login_required
@@ -284,42 +181,35 @@ def logout():
 def create_admin():
     secret = os.environ.get("CREATE_ADMIN_SECRET", "temporary_secret_for_local")
     provided = request.form.get("secret", "")
-
+    
     if provided != secret:
         return jsonify({"status": "failed", "msg": "Invalid secret"}), 403
-
+    
     name = request.form.get("name")
     email = request.form.get("email")
     password = request.form.get("password")
-
+    
     if not (name and email and password):
         return jsonify({"status": "failed", "msg": "Missing fields"}), 400
-
+    
     email = email.strip().lower()
+    existing = admins_col.find_one({"email": email})
+    if existing:
+        return jsonify({"status": "failed", "msg": "Admin already exists"}), 400
+    
+    password_hash = generate_password_hash(password)
+    doc = {
+        "_id": str(datetime.datetime.utcnow().timestamp()) + "_" + email,
+        "name": name,
+        "email": email,
+        "password_hash": password_hash,
+        "profile_image": "",
+        "created_at": datetime.datetime.utcnow()
+    }
+    admins_col.insert_one(doc)
+    return jsonify({"status": "success", "msg": "Admin created"}), 201
 
-    db = SessionLocal()
-    try:
-        existing = db.query(Admin).filter(Admin.email == email).first()
-        if existing:
-            return jsonify({"status": "failed", "msg": "Admin already exists"}), 400
-
-        new_admin = Admin(
-            name=name,
-            email=email,
-            password_hash=generate_password_hash(password)
-        )
-        db.add(new_admin)
-        db.commit()
-        return jsonify({"status": "success", "msg": "Admin created"}), 201
-    except IntegrityError:
-        db.rollback()
-        return jsonify({"status": "failed", "msg": "Admin already exists"}), 409
-    except Exception as e:
-        db.rollback()
-        return jsonify({"status": "failed", "msg": str(e)}), 500
-    finally:
-        db.close()
-
+# --- Admin Routes ---
 @app.route("/admin/dashboard")
 @admin_required
 def admin_dashboard():
@@ -339,94 +229,98 @@ def admin_profile():
 @app.route("/admin/update_profile", methods=["POST"])
 @admin_required
 def admin_update_profile():
-    db = SessionLocal()
     try:
-        admin = db.query(Admin).filter(Admin.id == uuid.UUID(current_user.id)).first()
-        if not admin:
-            flash("Admin not found", "danger")
-            return redirect(url_for("admin_profile"))
-
         name = request.form.get("name")
         file = request.files.get("profile_image")
-
+        
+        update_data = {}
         if name:
-            admin.name = name
-
+            update_data["name"] = name
+        
         if file:
             img_data = base64.b64encode(file.read()).decode('utf-8')
-            admin.profile_image = img_data
-
-        admin.updated_at = datetime.datetime.utcnow()
-        db.commit()
+            update_data["profile_image"] = img_data
+        
+        admins_col.update_one(
+            {"_id": current_user.id},
+            {"$set": update_data}
+        )
+        
         flash("Profile updated successfully", "success")
+        return redirect(url_for("admin_profile"))
     except Exception as e:
-        db.rollback()
         flash("Error updating profile", "danger")
-        print("[admin_update_profile error]", e)
-    finally:
-        db.close()
-
-    return redirect(url_for("admin_profile"))
+        return redirect(url_for("admin_profile"))
 
 @app.route("/reg")
 @admin_required
 def reg():
-    return render_template("reg_form.html")
+    return render_template("registration_form.html")
 
 @app.route("/enroll", methods=["POST"])
 @admin_required
 def enroll():
-    db = SessionLocal()
     try:
         name = request.form.get("name", "").strip()
         department = request.form.get("department", "").strip()
-        email = request.form.get("email", "").strip().lower()
+        email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
         password = request.form.get("password", "")
         files = request.files.getlist("files")
-
+        
         if not name or not email or not password:
             return jsonify({"status": "failed", "msg": "Name, email and password required"}), 400
-
+        
         if not files or len(files) < 5:
             return jsonify({"status": "failed", "msg": "Please upload at least 5 face images"}), 400
-
+        
         # Check if email exists
-        if db.query(User).filter(User.email == email).first():
+        if users_col.find_one({"email": email}):
             return jsonify({"status": "failed", "msg": "Email already exists"}), 400
-
+        
         print(f"[Enrollment] Processing {len(files)} images for {name}")
-
-        # Extract multi-vector embeddings
+        
+        # Extract multi-vector embeddings with quality scores
         embeddings_data = extract_multi_vector_embeddings(files)
-
+        
         if len(embeddings_data) < 5:
             return jsonify({
-                "status": "failed",
-                "msg": f"Only {len(embeddings_data)} valid faces detected. Need at least 5."
+                "status": "failed", 
+                "msg": f"Only {len(embeddings_data)} valid faces detected. Need at least 5 high-quality images."
             }), 400
-
-        # Create 3D template
+        
+        print(f"[Enrollment] Extracted {len(embeddings_data)} valid embeddings")
+        # --- FIX: compute formatted qualities first to avoid nested-quote f-string SyntaxError ---
+        qualities = []
+        for x in embeddings_data[:5]:
+            q = x.get("quality")
+            if q is None:
+                qualities.append("N/A")
+            else:
+                try:
+                    qualities.append(f"{q:.1f}")
+                except (TypeError, ValueError):
+                    qualities.append(str(q))
+        print(f"[Enrollment] Quality scores: {qualities}")
+        
+        # Create 3D template with weighted centroid
         template = create_3d_template(embeddings_data)
-
+        
         if template is None:
             return jsonify({"status": "failed", "msg": "Failed to create face template"}), 400
-
-        # Get profile image
+        
+        # Use first high-quality image as profile picture
         profile_image = None
         for i, emb_data in enumerate(embeddings_data[:3]):
             try:
-                # emb_data expected to contain 'index' referring to original uploaded file index
-                if 'index' in emb_data and isinstance(emb_data['index'], int):
-                    file = files[emb_data['index']]
-                else:
-                    file = files[i]
+                file = files[emb_data['index']]
                 file.seek(0)
                 file_bytes = file.read()
                 img_array = np.frombuffer(file_bytes, np.uint8)
                 image = cv.imdecode(img_array, cv.IMREAD_COLOR)
-
+                
                 if image is not None:
+                    # Resize for profile
                     image = cv.resize(image, (300, 300))
                     _, buffer = cv.imencode('.jpg', image)
                     profile_image = base64.b64encode(buffer).decode('utf-8')
@@ -434,68 +328,62 @@ def enroll():
             except Exception as e:
                 print(f"[Profile Image Error] {e}")
                 continue
-
-        # Save person
-        new_person = Person(
-            name=name,
-            embedding=pickle.dumps(template),
-            embedding_dim=int(template['centroid'].shape[0]) if 'centroid' in template else 0,
-            photos_count=len(embeddings_data),
-            status="active",
-            template_type="3D_multi_vector",
-            avg_quality=float(np.mean([x.get('quality', 0.0) for x in embeddings_data])),
-            update_count=0
-        )
-        db.add(new_person)
-
+        
+        # Save to persons collection with 3D template
+        persons_col.insert_one({
+            "name": name,
+            "embedding": pickle.dumps(template),
+            "embedding_dim": int(template['centroid'].shape[0]),
+            "photos_count": len(embeddings_data),
+            "status": "active",
+            "enrollment_date": datetime.datetime.now(),
+            "template_type": "3D_multi_vector",
+            "avg_quality": np.mean([x['quality'] for x in embeddings_data]),
+            "update_count": 0
+        })
+        
         # Save profile
-        new_profile = Profile(
-            name=name,
-            department=department,
-            email=email,
-            phone=phone,
-            profile_image=profile_image or ""
-        )
-        db.add(new_profile)
-
+        profile_col.insert_one({
+            "name": name,
+            "department": department,
+            "email": email,
+            "phone": phone,
+            "profile_image": profile_image or "",
+            "registered_at": datetime.datetime.now()
+        })
+        
         # Create user account
-        new_user = User(
-            name=name,
-            email=email,
-            password_hash=generate_password_hash(password),
-            department=department,
-            phone=phone,
-            profile_image=profile_image or "",
-            status="active"
-        )
-        db.add(new_user)
-
-        db.commit()
-
-        # Rebuild FAISS index (user-provided function)
-        try:
-            rebuild_faiss_index(db)
-        except Exception as e:
-            print("[FAISS rebuild error]", e)
-
-        print(f"[Enrollment] Successfully enrolled {name}")
-
+        users_col.insert_one({
+            "_id": str(datetime.datetime.utcnow().timestamp()) + "_" + email,
+            "name": name,
+            "email": email,
+            "password_hash": generate_password_hash(password),
+            "department": department,
+            "phone": phone,
+            "profile_image": profile_image or "",
+            "status": "active",
+            "created_at": datetime.datetime.now()
+        })
+        
+        # Rebuild FAISS index with new user
+        rebuild_faiss_index()
+        
+        print(f"[Enrollment] Successfully enrolled {name} with 3D template")
+        
         return jsonify({
             "status": "success",
             "name": name,
             "photos_used": len(embeddings_data),
-            "embedding_dim": int(template['centroid'].shape[0]) if 'centroid' in template else 0,
-            "avg_quality": round(float(np.mean([x.get('quality', 0.0) for x in embeddings_data])), 2),
+            "embedding_dim": int(template['centroid'].shape[0]),
+            "avg_quality": round(np.mean([x['quality'] for x in embeddings_data]), 2),
             "template_type": "3D Multi-Vector"
         })
-
+        
     except Exception as e:
-        db.rollback()
         print("[Enrollment Fatal Error]", e)
+        import traceback
         traceback.print_exc()
         return jsonify({"status": "failed", "msg": str(e)}), 500
-    finally:
-        db.close()
 
 @app.route("/registration_request")
 def registration_request():
@@ -503,29 +391,23 @@ def registration_request():
 
 @app.route("/submit_enrollment_request", methods=["POST"])
 def submit_enrollment_request():
-    db = SessionLocal()
     try:
         name = request.form.get("name", "").strip()
-        email = request.form.get("email", "").strip().lower()
+        email = request.form.get("email", "").strip()
         phone = request.form.get("phone", "").strip()
         password = request.form.get("password", "")
         files = request.files.getlist("files")
-
+        
         if not name or not email or not password:
-            return jsonify({"status": "failed", "msg": "Name, email and password required"}), 400
-
+            return jsonify({"status": "failed", "msg": "Name, email and password are required"}), 400
+        
         if not files or len(files) < 5:
             return jsonify({"status": "failed", "msg": "Please upload at least 5 face images"}), 400
-
-        # Check existing pending request
-        existing = db.query(EnrollmentRequest).filter(
-            EnrollmentRequest.email == email,
-            EnrollmentRequest.status == "pending"
-        ).first()
+        
+        existing = enrollment_requests_col.find_one({"email": email, "status": "pending"})
         if existing:
             return jsonify({"status": "failed", "msg": "A pending request already exists"}), 400
-
-        # Store images (base64)
+        
         stored_images = []
         for idx, file in enumerate(files[:10]):
             try:
@@ -535,127 +417,115 @@ def submit_enrollment_request():
             except Exception as e:
                 print(f"[Request Error] File {idx}: {e}")
                 continue
-
+        
         if len(stored_images) < 5:
             return jsonify({"status": "failed", "msg": "Failed to process images"}), 400
-
-        # Save request
-        new_request = EnrollmentRequest(
-            name=name,
-            email=email,
-            phone=phone,
-            password_hash=generate_password_hash(password),
-            images=stored_images,
-            status="pending"
-        )
-        db.add(new_request)
-        db.commit()
-
+        
+        request_doc = {
+            "name": name,
+            "email": email,
+            "phone": phone,
+            "password_hash": generate_password_hash(password),
+            "images": stored_images,
+            "status": "pending",
+            "submitted_at": datetime.datetime.now(),
+            "processed_at": None,
+            "processed_by": None
+        }
+        
+        enrollment_requests_col.insert_one(request_doc)
+        
         return jsonify({
             "status": "success",
             "msg": "Enrollment request submitted successfully",
             "name": name
         })
     except Exception as e:
-        db.rollback()
         print("[Request Submission Error]", e)
-        traceback.print_exc()
         return jsonify({"status": "failed", "msg": "Unexpected server error"}), 500
-    finally:
-        db.close()
 
 @app.route("/api/enrollment_requests")
 @admin_required
 def get_enrollment_requests():
-    db = SessionLocal()
-    try:
-        requests = db.query(EnrollmentRequest).filter(
-            EnrollmentRequest.status == "pending"
-        ).order_by(EnrollmentRequest.submitted_at.desc()).all()
-
-        out = []
-        for r in requests:
-            out.append({
-                "_id": str(r.id),
-                "name": r.name,
-                "email": r.email,
-                "phone": r.phone,
-                "status": r.status,
-                "submitted_at": r.submitted_at.isoformat() if r.submitted_at else ""
-            })
-        return jsonify(out)
-    finally:
-        db.close()
+    requests = list(enrollment_requests_col.find({"status": "pending"}).sort("submitted_at", -1))
+    out = []
+    for r in requests:
+        r["_id"] = str(r["_id"])
+        try:
+            r["submitted_at"] = r["submitted_at"].isoformat()
+        except:
+            pass
+        r.pop("images", None)
+        r.pop("password_hash", None)
+        out.append(r)
+    return jsonify(out)
 
 @app.route("/api/enrollment_request/<request_id>")
 @admin_required
 def get_enrollment_request_detail(request_id):
-    db = SessionLocal()
+    from bson.objectid import ObjectId
     try:
-        req = db.query(EnrollmentRequest).filter(
-            EnrollmentRequest.id == uuid.UUID(request_id)
-        ).first()
-
+        req = enrollment_requests_col.find_one({"_id": ObjectId(request_id)})
         if req:
-            return jsonify({
-                "_id": str(req.id),
-                "name": req.name,
-                "email": req.email,
-                "phone": req.phone,
-                "images": req.images,
-                "status": req.status,
-                "submitted_at": req.submitted_at.isoformat() if req.submitted_at else ""
-            })
+            req["_id"] = str(req["_id"])
+            if "submitted_at" in req:
+                req["submitted_at"] = req["submitted_at"].isoformat()
+            req.pop("password_hash", None)
+            return jsonify(req)
         return jsonify({"error": "Request not found"}), 404
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-    finally:
-        db.close()
+    except:
+        return jsonify({"error": "Invalid request ID"}), 400
 
 @app.route("/api/approve_enrollment/<request_id>", methods=["POST"])
 @admin_required
 def approve_enrollment(request_id):
-    db = SessionLocal()
+    """Approve enrollment request with 3D template creation"""
+    from bson.objectid import ObjectId
+    
     try:
-        req = db.query(EnrollmentRequest).filter(
-            EnrollmentRequest.id == uuid.UUID(request_id)
-        ).first()
-
+        req = enrollment_requests_col.find_one({"_id": ObjectId(request_id)})
         if not req:
             return jsonify({"status": "failed", "msg": "Request not found"}), 404
-
-        if req.status != "pending":
+        
+        if req["status"] != "pending":
             return jsonify({"status": "failed", "msg": "Request already processed"}), 400
-
-        # Decode images (base64 -> BGR cv images)
+        
+        print(f"[Approval] Processing request for {req['name']}")
+        
+        # Decode and process images
         images = []
-        for idx, img_b64 in enumerate(req.images):
+        for idx, img_b64 in enumerate(req["images"]):
             try:
                 img_bytes = base64.b64decode(img_b64)
                 img_array = np.frombuffer(img_bytes, np.uint8)
                 image = cv.imdecode(img_array, cv.IMREAD_COLOR)
+                
                 if image is not None:
                     images.append(image)
             except Exception as e:
                 print(f"[Approval] Error decoding image {idx}: {e}")
                 continue
-
+        
         if len(images) < 5:
-            return jsonify({"status": "failed", "msg": f"Only {len(images)} valid images"}), 400
-
+            return jsonify({"status": "failed", "msg": f"Only {len(images)} valid images. Need at least 5."}), 400
+        
+        # Extract multi-vector embeddings
         embeddings_data = extract_multi_vector_embeddings(images)
+        
         if len(embeddings_data) < 5:
-            return jsonify({"status": "failed", "msg": "Not enough valid faces detected"}), 400
-
+            return jsonify({"status": "failed", "msg": f"Only {len(embeddings_data)} valid faces detected"}), 400
+        
+        # Create 3D template
         template = create_3d_template(embeddings_data)
+        
         if template is None:
             return jsonify({"status": "failed", "msg": "Failed to create face template"}), 400
-
-        # Choose best quality index if available
+        
+        # Get profile image from best quality image
         profile_image = None
+        best_quality_idx = embeddings_data[0]['index']
         try:
-            best_idx = embeddings_data[0].get('index', 0)
-            img_bytes = base64.b64decode(req.images[best_idx])
+            img_bytes = base64.b64decode(req["images"][best_quality_idx])
             img_array = np.frombuffer(img_bytes, np.uint8)
             image = cv.imdecode(img_array, cv.IMREAD_COLOR)
             if image is not None:
@@ -664,365 +534,336 @@ def approve_enrollment(request_id):
                 profile_image = base64.b64encode(buffer).decode('utf-8')
         except Exception as e:
             print(f"[Profile Image Error] {e}")
-
+        
         department = request.form.get("department", "")
-
-        # Save person
-        new_person = Person(
-            name=req.name,
-            embedding=pickle.dumps(template),
-            embedding_dim=int(template['centroid'].shape[0]) if 'centroid' in template else 0,
-            photos_count=len(embeddings_data),
-            status="active",
-            template_type="3D_multi_vector",
-            avg_quality=float(np.mean([x.get('quality', 0.0) for x in embeddings_data])),
-            update_count=0
-        )
-        db.add(new_person)
-
+        
+        # Save to persons collection with 3D template
+        persons_col.insert_one({
+            "name": req["name"],
+            "embedding": pickle.dumps(template),
+            "embedding_dim": int(template['centroid'].shape[0]),
+            "photos_count": len(embeddings_data),
+            "status": "active",
+            "enrollment_date": datetime.datetime.now(),
+            "template_type": "3D_multi_vector",
+            "avg_quality": np.mean([x['quality'] for x in embeddings_data]),
+            "update_count": 0
+        })
+        
         # Save profile
-        new_profile = Profile(
-            name=req.name,
-            department=department,
-            email=req.email,
-            phone=req.phone,
-            profile_image=profile_image or ""
+        profile_col.insert_one({
+            "name": req["name"],
+            "department": department,
+            "email": req["email"],
+            "phone": req["phone"],
+            "profile_image": profile_image or "",
+            "registered_at": datetime.datetime.now()
+        })
+        
+        # Create user account
+        users_col.insert_one({
+            "_id": str(datetime.datetime.utcnow().timestamp()) + "_" + req["email"],
+            "name": req["name"],
+            "email": req["email"],
+            "password_hash": req["password_hash"],
+            "department": department,
+            "phone": req["phone"],
+            "profile_image": profile_image or "",
+            "status": "active",
+            "created_at": datetime.datetime.now()
+        })
+        
+        # Update request status
+        enrollment_requests_col.update_one(
+            {"_id": ObjectId(request_id)},
+            {"$set": {
+                "status": "approved",
+                "processed_at": datetime.datetime.now(),
+                "processed_by": current_user.email
+            }}
         )
-        db.add(new_profile)
-
-        # Create user account (use existing password hash from request)
-        new_user = User(
-            name=req.name,
-            email=req.email,
-            password_hash=req.password_hash,
-            department=department,
-            phone=req.phone,
-            profile_image=profile_image or "",
-            status="active"
-        )
-        db.add(new_user)
-
-        # Update request
-        req.status = "approved"
-        req.processed_at = datetime.datetime.utcnow()
-        req.processed_by = current_user.email if getattr(current_user, "email", None) else None
-
-        db.commit()
-
+        
         # Rebuild FAISS index
-        try:
-            rebuild_faiss_index(db)
-        except Exception as e:
-            print("[FAISS rebuild error]", e)
-
+        rebuild_faiss_index()
+        
+        print(f"[Approval] Successfully approved {req['name']} with 3D template")
+        
         return jsonify({
             "status": "success",
-            "msg": f"{req.name} has been enrolled successfully",
+            "msg": f"{req['name']} has been enrolled successfully",
             "photos_used": len(embeddings_data),
-            "avg_quality": round(float(np.mean([x.get('quality', 0.0) for x in embeddings_data])), 2)
+            "avg_quality": round(np.mean([x['quality'] for x in embeddings_data]), 2)
         })
-
+        
     except Exception as e:
-        db.rollback()
         print("[Approval Fatal Error]", e)
+        import traceback
         traceback.print_exc()
         return jsonify({"status": "failed", "msg": str(e)}), 500
-    finally:
-        db.close()
 
 @app.route("/api/reject_enrollment/<request_id>", methods=["POST"])
 @admin_required
 def reject_enrollment(request_id):
-    db = SessionLocal()
+    from bson.objectid import ObjectId
+    
     try:
         reason = request.form.get("reason", "Not specified")
-
-        req = db.query(EnrollmentRequest).filter(
-            EnrollmentRequest.id == uuid.UUID(request_id)
-        ).first()
-
-        if not req:
-            return jsonify({"status": "failed", "msg": "Request not found"}), 404
-
-        req.status = "rejected"
-        req.rejection_reason = reason
-        req.processed_at = datetime.datetime.utcnow()
-        req.processed_by = current_user.email if getattr(current_user, "email", None) else None
-
-        db.commit()
-        return jsonify({"status": "success", "msg": "Request rejected"})
+        
+        result = enrollment_requests_col.update_one(
+            {"_id": ObjectId(request_id)},
+            {"$set": {
+                "status": "rejected",
+                "rejection_reason": reason,
+                "processed_at": datetime.datetime.now(),
+                "processed_by": current_user.email
+            }}
+        )
+        
+        if result.modified_count > 0:
+            return jsonify({"status": "success", "msg": "Request rejected"})
+        return jsonify({"status": "failed", "msg": "Request not found"}), 404
     except Exception as e:
-        db.rollback()
+        print("[Rejection Error]", e)
         return jsonify({"status": "failed", "msg": str(e)}), 500
-    finally:
-        db.close()
 
 @app.route("/api/pending_requests_count")
 @admin_required
 def pending_requests_count():
-    db = SessionLocal()
-    try:
-        count = db.query(EnrollmentRequest).filter(
-            EnrollmentRequest.status == "pending"
-        ).count()
-        return jsonify({"count": count})
-    finally:
-        db.close()
+    count = enrollment_requests_col.count_documents({"status": "pending"})
+    return jsonify({"count": count})
 
 @app.route("/api/attendance_recent")
 @admin_required
 def attendance_recent():
-    db = SessionLocal()
-    try:
-        records = db.query(Attendance).order_by(Attendance.timestamp.desc()).limit(50).all()
-        out = []
-        for r in records:
-            out.append({
-                "name": r.name,
-                "timestamp": r.timestamp.isoformat() if r.timestamp else "",
-                "confidence": r.confidence
-            })
-        return jsonify(out)
-    finally:
-        db.close()
+    records = list(attendance_col.find().sort("timestamp", -1).limit(50))
+    out = []
+    for r in records:
+        try:
+            ts = r.get("timestamp")
+            iso = ts if isinstance(ts, str) else ts.isoformat()
+        except Exception:
+            iso = ""
+        out.append({
+            "name": r.get("name"),
+            "timestamp": iso,
+            "confidence": r.get("confidence", 0)
+        })
+    return jsonify(out)
 
 @app.route("/api/attendance_stats")
 @admin_required
 def attendance_stats():
-    db = SessionLocal()
-    try:
-        days = int(request.args.get("days", 30))
-        end = datetime.datetime.utcnow()
-        start = end - datetime.timedelta(days=days - 1)
-
-        records = db.query(Attendance).filter(
-            Attendance.timestamp >= start,
-            Attendance.timestamp <= end
-        ).all()
-
-        counts = {}
-        for r in records:
-            day = r.timestamp.date().isoformat()
-            counts[day] = counts.get(day, 0) + 1
-
-        labels = []
-        values = []
-        for i in range(days):
-            day_dt = (start + datetime.timedelta(days=i)).date()
-            day_str = day_dt.isoformat()
-            labels.append(day_str)
-            values.append(counts.get(day_str, 0))
-
-        return jsonify({"labels": labels, "values": values})
-    finally:
-        db.close()
+    days = int(request.args.get("days", 30))
+    end = datetime.datetime.utcnow()
+    start = end - datetime.timedelta(days=days - 1)
+    
+    records = list(attendance_col.find({}))
+    counts = {}
+    
+    for r in records:
+        ts = r.get("timestamp")
+        if isinstance(ts, str):
+            try:
+                dt = datetime.datetime.fromisoformat(ts)
+            except Exception:
+                continue
+        elif isinstance(ts, datetime.datetime):
+            dt = ts
+        else:
+            continue
+        
+        if dt < start or dt > end:
+            continue
+        
+        day = dt.date().isoformat()
+        counts[day] = counts.get(day, 0) + 1
+    
+    labels = []
+    values = []
+    for i in range(days):
+        day_dt = (start + datetime.timedelta(days=i)).date()
+        day_str = day_dt.isoformat()
+        labels.append(day_str)
+        values.append(counts.get(day_str, 0))
+    
+    return jsonify({"labels": labels, "values": values})
 
 @app.route("/list_users")
 @admin_required
 def list_users():
-    db = SessionLocal()
-    try:
-        users = db.query(Person).all()
-        out = []
-        for user in users:
-            out.append({
-                "_id": str(user.id),
-                "name": user.name,
-                "photos_count": user.photos_count,
-                "enrollment_date": user.enrollment_date.isoformat() if user.enrollment_date else "",
-                "status": user.status
-            })
-        return jsonify(out)
-    finally:
-        db.close()
+    users = list(persons_col.find({}, {
+        "name": 1,
+        "photos_count": 1,
+        "enrollment_date": 1,
+        "status": 1
+    }))
+    for user in users:
+        user["_id"] = str(user["_id"])
+        if "enrollment_date" in user:
+            try:
+                user["enrollment_date"] = user["enrollment_date"].isoformat()
+            except:
+                pass
+    return jsonify(users)
 
 @app.route("/api/block_user", methods=["POST"])
 @admin_required
 def block_user():
-    db = SessionLocal()
-    try:
-        name = request.form.get("name")
-        if not name:
-            return jsonify({"status": "failed", "msg": "Name required"}), 400
-
-        person = db.query(Person).filter(Person.name == name).first()
-        if person:
-            person.status = "blocked"
-
-        user = db.query(User).filter(User.name == name).first()
-        if user:
-            user.status = "blocked"
-
-        db.commit()
-        try:
-            rebuild_faiss_index(db)
-        except Exception as e:
-            print("[FAISS rebuild error]", e)
-
-        return jsonify({"status": "success", "msg": f"{name} has been blocked"})
-    finally:
-        db.close()
+    name = request.form.get("name")
+    if not name:
+        return jsonify({"status": "failed", "msg": "Name required"}), 400
+    
+    persons_col.update_one({"name": name}, {"$set": {"status": "blocked"}})
+    users_col.update_one({"name": name}, {"$set": {"status": "blocked"}})
+    
+    rebuild_faiss_index()
+    
+    return jsonify({"status": "success", "msg": f"{name} has been blocked"})
 
 @app.route("/api/unblock_user", methods=["POST"])
 @admin_required
 def unblock_user():
-    db = SessionLocal()
+    name = request.form.get("name")
+    if not name:
+        return jsonify({"status": "failed", "msg": "Name required"}), 400
+    
+    persons_col.update_one({"name": name}, {"$set": {"status": "active"}})
+    users_col.update_one({"name": name}, {"$set": {"status": "active"}})
+    
+    rebuild_faiss_index()
+    
+    return jsonify({"status": "success", "msg": f"{name} has been unblocked"})
+
+@app.route("/api/system_stats")
+@admin_required
+def system_stats():
+    """Get system-wide statistics including continuous learning metrics"""
     try:
-        name = request.form.get("name")
-        if not name:
-            return jsonify({"status": "failed", "msg": "Name required"}), 400
+        # Count users with 3D templates
+        users_with_3d = persons_col.count_documents({"template_type": "3D_multi_vector"})
+        total_users = persons_col.count_documents({})
+        
+        # Get average update count (continuous learning activity)
+        pipeline = [
+            {"$group": {
+                "_id": None,
+                "avg_updates": {"$avg": "$update_count"},
+                "total_updates": {"$sum": "$update_count"}
+            }}
+        ]
+        learning_stats = list(persons_col.aggregate(pipeline))
+        
+        # Get average quality scores
+        quality_pipeline = [
+            {"$match": {"avg_quality": {"$exists": True}}},
+            {"$group": {
+                "_id": None,
+                "avg_quality": {"$avg": "$avg_quality"}
+            }}
+        ]
+        quality_stats = list(persons_col.aggregate(quality_pipeline))
+        
+        return jsonify({
+            "total_users": total_users,
+            "users_with_3d_template": users_with_3d,
+            "3d_template_percentage": round((users_with_3d / total_users * 100) if total_users > 0 else 0, 2),
+            "avg_updates_per_user": round(learning_stats[0]['avg_updates'], 2) if learning_stats else 0,
+            "total_continuous_updates": learning_stats[0]['total_updates'] if learning_stats else 0,
+            "avg_enrollment_quality": round(quality_stats[0]['avg_quality'], 2) if quality_stats else 0,
+            "faiss_index_size": faiss_index.ntotal if faiss_index else 0
+        })
+    except Exception as e:
+        print(f"[System Stats Error] {e}")
+        return jsonify({"error": str(e)}), 500
 
-        person = db.query(Person).filter(Person.name == name).first()
-        if person:
-            person.status = "active"
-
-        user = db.query(User).filter(User.name == name).first()
-        if user:
-            user.status = "active"
-
-        db.commit()
-        try:
-            rebuild_faiss_index(db)
-        except Exception as e:
-            print("[FAISS rebuild error]", e)
-
-        return jsonify({"status": "success", "msg": f"{name} has been unblocked"})
-    finally:
-        db.close()
-
+# --- User Routes ---
 @app.route("/user/dashboard")
 @login_required
 def user_dashboard():
-    if getattr(current_user, "role", None) == 'admin':
+    if current_user.role == 'admin':
         return redirect(url_for("admin_dashboard"))
     return render_template("user_dashboard.html", user=current_user)
 
 @app.route("/user/profile")
 @login_required
 def user_profile():
-    db = SessionLocal()
-    try:
-        profile = db.query(Profile).filter(Profile.email == current_user.email).first()
-        return render_template("user_profile.html", profile=profile, user=current_user)
-    finally:
-        db.close()
+    profile = profile_col.find_one({"email": current_user.email})
+    return render_template("user_profile.html", profile=profile, user=current_user)
 
 @app.route("/user/update_profile", methods=["POST"])
 @login_required
 def user_update_profile():
-    db = SessionLocal()
     try:
         phone = request.form.get("phone")
         file = request.files.get("profile_image")
-
-        img_data = None
+        
+        update_data = {}
+        if phone:
+            update_data["phone"] = phone
+        
         if file:
             img_data = base64.b64encode(file.read()).decode('utf-8')
-
-        # Update profile
-        profile = db.query(Profile).filter(Profile.email == current_user.email).first()
-        if profile:
-            if phone:
-                profile.phone = phone
-            if img_data:
-                profile.profile_image = img_data
-
-        # Update user
-        user = db.query(User).filter(User.email == current_user.email).first()
-        if user:
-            if phone:
-                user.phone = phone
-            if img_data:
-                user.profile_image = img_data
-
-        db.commit()
+            update_data["profile_image"] = img_data
+        
+        if update_data:
+            profile_col.update_one({"email": current_user.email}, {"$set": update_data})
+            users_col.update_one({"email": current_user.email}, {"$set": update_data})
+        
         flash("Profile updated successfully", "success")
+        return redirect(url_for("user_profile"))
     except Exception as e:
-        db.rollback()
-        print("[user_update_profile error]", e)
         flash("Error updating profile", "danger")
-    finally:
-        db.close()
-
-    return redirect(url_for("user_profile"))
+        return redirect(url_for("user_profile"))
 
 @app.route("/api/user/attendance_history")
 @login_required
 def user_attendance_history():
-    db = SessionLocal()
-    try:
-        records = db.query(Attendance).filter(
-            Attendance.name == current_user.name
-        ).order_by(Attendance.timestamp.desc()).limit(100).all()
-
-        out = []
-        for r in records:
-            out.append({
-                "timestamp": r.timestamp.isoformat() if r.timestamp else "",
-                "confidence": r.confidence
-            })
-        return jsonify(out)
-    finally:
-        db.close()
+    records = list(attendance_col.find({"name": current_user.name}).sort("timestamp", -1).limit(100))
+    out = []
+    for r in records:
+        try:
+            ts = r.get("timestamp")
+            iso = ts if isinstance(ts, str) else ts.isoformat()
+        except Exception:
+            iso = ""
+        out.append({
+            "timestamp": iso,
+            "confidence": r.get("confidence", 0)
+        })
+    return jsonify(out)
 
 @app.route("/api/user/attendance_stats")
 @login_required
 def user_attendance_stats():
-    db = SessionLocal()
-    try:
-        days = int(request.args.get("days", 30))
-        end = datetime.datetime.utcnow()
-        start = end - datetime.timedelta(days=days - 1)
-
-        records = db.query(Attendance).filter(
-            Attendance.name == current_user.name,
-            Attendance.timestamp >= start,
-            Attendance.timestamp <= end
-        ).all()
-
-        present_days = set()
-        for r in records:
-            present_days.add(r.timestamp.date().isoformat())
-
-        return jsonify({
-            "present_days": len(present_days),
-            "total_days": days,
-            "percentage": round((len(present_days) / days) * 100, 2) if days > 0 else 0.0
-        })
-    finally:
-        db.close()
-
-@app.route("/api/system_stats")
-@admin_required
-def system_stats():
-    db = SessionLocal()
-    try:
-        total_users = db.query(Person).count()
-        users_with_3d = db.query(Person).filter(Person.template_type == "3D_multi_vector").count()
-
-        avg_updates = db.query(func.avg(Person.update_count)).scalar() or 0
-        total_updates = db.query(func.sum(Person.update_count)).scalar() or 0
-        avg_quality = db.query(func.avg(Person.avg_quality)).filter(
-            Person.avg_quality.isnot(None)
-        ).scalar() or 0
-
-        # faiss_index comes from function.py
-        size = faiss_index.ntotal if (faiss_index is not None and hasattr(faiss_index, "ntotal")) else 0
-
-        return jsonify({
-            "total_users": int(total_users),
-            "users_with_3d_template": int(users_with_3d),
-            "3d_template_percentage": round((users_with_3d / total_users * 100) if total_users > 0 else 0, 2),
-            "avg_updates_per_user": round(float(avg_updates), 2),
-            "total_continuous_updates": int(total_updates) if total_updates is not None else 0,
-            "avg_enrollment_quality": round(float(avg_quality), 2),
-            "faiss_index_size": int(size)
-        })
-    except Exception as e:
-        print(f"[System Stats Error] {e}")
-        return jsonify({"error": str(e)}), 500
-    finally:
-        db.close()
+    days = int(request.args.get("days", 30))
+    end = datetime.datetime.utcnow()
+    start = end - datetime.timedelta(days=days - 1)
+    
+    records = list(attendance_col.find({"name": current_user.name}))
+    
+    total_days = 0
+    present_days = set()
+    
+    for r in records:
+        ts = r.get("timestamp")
+        if isinstance(ts, str):
+            try:
+                dt = datetime.datetime.fromisoformat(ts)
+            except Exception:
+                continue
+        elif isinstance(ts, datetime.datetime):
+            dt = ts
+        else:
+            continue
+        
+        if dt >= start and dt <= end:
+            present_days.add(dt.date().isoformat())
+    
+    return jsonify({
+        "present_days": len(present_days),
+        "total_days": days,
+        "percentage": round((len(present_days) / days) * 100, 2)
+    })
 
 @app.route("/video_feed")
 @admin_required
@@ -1033,67 +874,71 @@ def video_feed():
 @app.route("/mark_attendance", methods=["POST"])
 @admin_required
 def mark_attendance():
-    db = SessionLocal()
+    file = request.files.get("file")
+    if not file:
+        return jsonify({"status": "failed", "msg": "No file uploaded"}), 400
+    
+    embedding = get_face_embedding(file)
+    if embedding is None:
+        return jsonify({"status": "failed", "msg": "No face detected"}), 400
+    
+    matched_name, confidence = search_face_faiss(embedding, threshold=0.6)
+    
+    if matched_name:
+        person_doc = persons_col.find_one({"name": matched_name})
+        if person_doc and person_doc.get("status") == "blocked":
+            return jsonify({"status": "failed", "msg": f"{matched_name} is blocked"}), 403
+        
+        template_type = person_doc.get("template_type", "Standard") if person_doc else "Standard"
+        
+        attendance_col.insert_one({
+            "name": matched_name,
+            "timestamp": datetime.datetime.now().isoformat(),
+            "confidence": confidence,
+            "template_type": template_type,
+            "method": "manual"
+        })
+        return jsonify({
+            "status": "success",
+            "msg": f"Attendance marked for {matched_name}",
+            "name": matched_name,
+            "score": round(confidence, 3),
+            "template_type": template_type
+        })
+    
+    return jsonify({"status": "failed", "msg": "No match found"}), 404
+
+# Auto-create admin on startup
+def create_default_admin():
+    """Create default admin if none exists"""
     try:
-        file = request.files.get("file")
-        if not file:
-            return jsonify({"status": "failed", "msg": "No file uploaded"}), 400
-
-        embedding = get_face_embedding(file)
-        if embedding is None:
-            return jsonify({"status": "failed", "msg": "No face detected"}), 400
-
-        matched_name, confidence = search_face_faiss(embedding, threshold=0.6)
-        if matched_name:
-            person = db.query(Person).filter(Person.name == matched_name).first()
-            if person and person.status == "blocked":
-                return jsonify({"status": "failed", "msg": f"{matched_name} is blocked"}), 403
-
-            template_type = person.template_type if person else "Standard"
-
-            new_attendance = Attendance(
-                name=matched_name,
-                confidence=confidence,
-                template_type=template_type,
-                method="manual"
-            )
-            db.add(new_attendance)
-            db.commit()
-
-            return jsonify({
-                "status": "success",
-                "msg": f"Attendance marked for {matched_name}",
-                "name": matched_name,
-                "score": round(confidence, 3) if confidence is not None else None,
-                "template_type": template_type
-            })
-
-        return jsonify({"status": "failed", "msg": "No match found"}), 404
+        admin_email = os.environ.get("ADMIN_EMAIL", "admin@admin.com")
+        admin_password = os.environ.get("ADMIN_PASSWORD", "password123")
+        
+        existing = admins_col.find_one({"email": admin_email})
+        if not existing:
+            admin_id = f"{datetime.datetime.utcnow().timestamp()}_{admin_email}"
+            admin_doc = {
+                "_id": admin_id,
+                "name": "System Admin",
+                "email": admin_email,
+                "password_hash": generate_password_hash(admin_password),
+                "profile_image": "",
+                "created_at": datetime.datetime.utcnow()
+            }
+            admins_col.insert_one(admin_doc)
+            print(f"✅ Admin created: {admin_email}")
+        else:
+            print(f"✅ Admin exists: {existing['email']}")
     except Exception as e:
-        db.rollback()
-        print("[mark_attendance error]", e)
-        traceback.print_exc()
-        return jsonify({"status": "failed", "msg": str(e)}), 500
-    finally:
-        db.close()
+        print(f"⚠️ Admin creation error: {e}")
 
-@app.route("/health")
-def health():
-    """Health check endpoint for Docker"""
-    db = SessionLocal()
-    try:
-        db.execute(text("SELECT 1"))
-        return jsonify({"status": "healthy", "database": "connected"}), 200
-    except Exception as e:
-        return jsonify({"status": "unhealthy", "error": str(e)}), 500
-    finally:
-        db.close()
-
-# Cleanup session on teardown
-@app.teardown_appcontext
-def shutdown_session(exception=None):
-    SessionLocal.remove()
+# Initialize on startup
+try:
+    initialize_faiss_index()
+    create_default_admin()
+except Exception as e:
+    print(f"[Startup Error] {e}")
 
 if __name__ == "__main__":
-    
-    app.run( debug=True, port=5000)
+    app.run(debug=True, port=5000)
