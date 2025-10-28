@@ -1,9 +1,19 @@
 services:
-  # Web Service using Docker
+  # PostgreSQL Database (create first)
+  - type: pserv
+    name: face-recognition-db
+    plan: free
+    databaseName: attendance_db
+    user: attendance_user
+
+  # Web Service
   - type: web
-    name: face-recognition-attendance
+    name: face-recognition-app
     runtime: docker
     plan: free
+    region: oregon
+    branch: main
+    dockerfilePath: ./Dockerfile
     envVars:
       - key: FLASK_SECRET
         generateValue: true
@@ -15,11 +25,8 @@ services:
           property: connectionString
       - key: PORT
         value: "10000"
+      - key: ADMIN_EMAIL
+        value: admin@admin.com
+      - key: ADMIN_PASSWORD
+        value: password123
     healthCheckPath: /health
-
-  # PostgreSQL Database
-  - type: pserv
-    name: face-recognition-db
-    runtime: postgresql
-    plan: free
-    ipAllowList: []
