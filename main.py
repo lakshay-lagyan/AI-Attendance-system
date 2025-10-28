@@ -60,7 +60,7 @@ class UserModel(Base):
     department = Column(String, default="")
     phone = Column(String, default="")
     profile_image = Column(Text, default="")
-    status = Column(String, default="active")  # active | blocked
+    status = Column(String, default="active")  
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
 class PersonModel(Base):
