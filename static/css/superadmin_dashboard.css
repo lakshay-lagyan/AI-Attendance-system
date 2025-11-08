@@ -9,7 +9,7 @@
     --sa-accent: #c084fc;
     --sa-bg: #f3f4f6;
     --sa-card-bg: #ffffff;
-    --sa-text: #1f2937;
+    --sa-text: #364b69;
     --sa-text-light: #6b7280;
     --sa-border: #e5e7eb;
     --sa-success: #10b981;
@@ -44,7 +44,7 @@ body {
     width: 280px;
     height: 100vh;
     background: linear-gradient(180deg, var(--sa-primary) 0%, var(--sa-secondary) 100%);
-    color: white;
+    color: rgb(214, 188, 188);
     z-index: 1000;
     overflow-y: auto;
     transition: transform 0.3s ease;
