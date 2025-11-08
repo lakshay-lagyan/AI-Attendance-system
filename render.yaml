@@ -13,11 +13,20 @@ services:
       - key: CREATE_ADMIN_SECRET
         generateValue: true
       - key: MONGODB_URI
-        value: mongodb+srv://attenXdb:<x1NHk8oKm8rNnJtU>@facedb.ofzetzr.mongodb.net/?appName=facedb
+        sync: false  # Set this manually in Render dashboard
       - key: PORT
         value: "10000"
       - key: ADMIN_EMAIL
         value: admin@admin.com
       - key: ADMIN_PASSWORD
         value: password123
+      # TensorFlow/Keras environment variables (CRITICAL for fixing Keras import)
+      - key: TF_USE_LEGACY_KERAS
+        value: "1"
+      - key: TF_CPP_MIN_LOG_LEVEL
+        value: "3"
+      - key: TF_ENABLE_ONEDNN_OPTS
+        value: "0"
+      - key: PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION
+        value: python
     healthCheckPath: /health

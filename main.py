@@ -908,6 +908,31 @@ def mark_attendance():
     
     return jsonify({"status": "failed", "msg": "No match found"}), 404
 
+# Health check endpoint for Railway
+@app.route("/health")
+def health_check():
+    """Health check endpoint for deployment platforms"""
+    try:
+        # Check MongoDB connection
+        client.admin.command('ping')
+        
+        # Check FAISS index
+        faiss_status = "loaded" if faiss_index is not None else "not_loaded"
+        
+        return jsonify({
+            "status": "healthy",
+            "mongodb": "connected",
+            "faiss_index": faiss_status,
+            "faiss_count": faiss_index.ntotal if faiss_index else 0,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }), 503
+
 # Auto-create admin on startup
 def create_default_admin():
     """Create default admin if none exists"""
@@ -933,12 +958,37 @@ def create_default_admin():
     except Exception as e:
         print(f"⚠️ Admin creation error: {e}")
 
-# Initialize on startup
-try:
-    initialize_faiss_index()
-    create_default_admin()
-except Exception as e:
-    print(f"[Startup Error] {e}")
+# Initialize on startup with better error handling
+def initialize_app():
+    """Initialize application components with error handling"""
+    print("[Startup] Initializing application...")
+    
+    try:
+        # Test MongoDB connection
+        client.admin.command('ping')
+        print("✅ MongoDB connected")
+    except Exception as e:
+        print(f"⚠️ MongoDB connection error: {e}")
+        print("Application will continue but database operations may fail")
+    
+    try:
+        # Initialize FAISS index
+        initialize_faiss_index()
+        print("✅ FAISS index initialized")
+    except Exception as e:
+        print(f"⚠️ FAISS initialization error: {e}")
+    
+    try:
+        # Create default admin
+        create_default_admin()
+    except Exception as e:
+        print(f"⚠️ Admin creation error: {e}")
+    
+    print("[Startup] Application initialization complete")
+
+# Run initialization
+initialize_app()
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    port = int(os.environ.get("PORT", 5000))
+    app.run(debug=False, host="0.0.0.0", port=port)
