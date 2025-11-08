@@ -827,30 +827,96 @@ def list_users():
 @app.route("/api/block_user", methods=["POST"])
 @admin_required
 def block_user():
-    name = request.form.get("name")
-    if not name:
-        return jsonify({"status": "failed", "msg": "Name required"}), 400
-    
-    persons_col.update_one({"name": name}, {"$set": {"status": "blocked"}})
-    users_col.update_one({"name": name}, {"$set": {"status": "blocked"}})
-    
-    rebuild_faiss_index()
-    
-    return jsonify({"status": "success", "msg": f"{name} has been blocked"})
+    """Block a user from the system"""
+    try:
+        # Accept both form data and JSON
+        if request.is_json:
+            data = request.get_json()
+            name = data.get("name")
+            user_id = data.get("user_id")
+        else:
+            name = request.form.get("name")
+            user_id = request.form.get("user_id")
+        
+        if not name and not user_id:
+            return jsonify({"status": "failed", "msg": "Name or user_id required"}), 400
+        
+        # Find user by name or ID
+        query = {"name": name} if name else {"_id": ObjectId(user_id)}
+        
+        # Update person status
+        result = persons_col.update_one(query, {"$set": {"status": "blocked"}})
+        users_col.update_one(query, {"$set": {"status": "blocked"}})
+        
+        if result.matched_count == 0:
+            return jsonify({"status": "failed", "msg": "User not found"}), 404
+        
+        # Log the action
+        system_logs_col.insert_one({
+            "action": "block_user",
+            "user_name": name or user_id,
+            "admin_email": current_user.email,
+            "timestamp": datetime.datetime.utcnow()
+        })
+        
+        # Rebuild FAISS index in background (non-blocking)
+        import threading
+        threading.Thread(target=rebuild_faiss_index, daemon=True).start()
+        
+        return jsonify({
+            "status": "success",
+            "msg": f"{name or 'User'} has been blocked successfully"
+        })
+    except Exception as e:
+        print(f"[Block User Error] {e}")
+        return jsonify({"status": "failed", "msg": str(e)}), 500
 
 @app.route("/api/unblock_user", methods=["POST"])
 @admin_required
 def unblock_user():
-    name = request.form.get("name")
-    if not name:
-        return jsonify({"status": "failed", "msg": "Name required"}), 400
-    
-    persons_col.update_one({"name": name}, {"$set": {"status": "active"}})
-    users_col.update_one({"name": name}, {"$set": {"status": "active"}})
-    
-    rebuild_faiss_index()
-    
-    return jsonify({"status": "success", "msg": f"{name} has been unblocked"})
+    """Unblock a user"""
+    try:
+        # Accept both form data and JSON
+        if request.is_json:
+            data = request.get_json()
+            name = data.get("name")
+            user_id = data.get("user_id")
+        else:
+            name = request.form.get("name")
+            user_id = request.form.get("user_id")
+        
+        if not name and not user_id:
+            return jsonify({"status": "failed", "msg": "Name or user_id required"}), 400
+        
+        # Find user by name or ID
+        query = {"name": name} if name else {"_id": ObjectId(user_id)}
+        
+        # Update person status
+        result = persons_col.update_one(query, {"$set": {"status": "active"}})
+        users_col.update_one(query, {"$set": {"status": "active"}})
+        
+        if result.matched_count == 0:
+            return jsonify({"status": "failed", "msg": "User not found"}), 404
+        
+        # Log the action
+        system_logs_col.insert_one({
+            "action": "unblock_user",
+            "user_name": name or user_id,
+            "admin_email": current_user.email,
+            "timestamp": datetime.datetime.utcnow()
+        })
+        
+        # Rebuild FAISS index in background (non-blocking)
+        import threading
+        threading.Thread(target=rebuild_faiss_index, daemon=True).start()
+        
+        return jsonify({
+            "status": "success",
+            "msg": f"{name or 'User'} has been unblocked successfully"
+        })
+    except Exception as e:
+        print(f"[Unblock User Error] {e}")
+        return jsonify({"status": "failed", "msg": str(e)}), 500
 
 @app.route("/api/system_stats")
 @admin_required
@@ -1267,6 +1333,118 @@ def superadmin_system_stats():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/superadmin/users")
+@superadmin_required
+def api_get_all_users():
+    """API endpoint to get all users as JSON"""
+    try:
+        users = list(persons_col.find({}))
+        for user in users:
+            user["_id"] = str(user["_id"])
+            if "created_at" in user:
+                try:
+                    user["created_at"] = user["created_at"].isoformat()
+                except:
+                    pass
+            if "last_attendance" in user:
+                try:
+                    user["last_attendance"] = user["last_attendance"].isoformat()
+                except:
+                    pass
+        return jsonify({"status": "success", "users": users})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/logs")
+@superadmin_required
+def api_get_logs():
+    """API endpoint to get system logs as JSON"""
+    try:
+        per_page = int(request.args.get("per_page", 50))
+        page = int(request.args.get("page", 1))
+        
+        skip = (page - 1) * per_page
+        logs = list(system_logs_col.find().sort("timestamp", -1).skip(skip).limit(per_page))
+        total = system_logs_col.count_documents({})
+        
+        for log in logs:
+            log["_id"] = str(log["_id"])
+            if "timestamp" in log:
+                try:
+                    log["timestamp"] = log["timestamp"].isoformat()
+                except:
+                    pass
+        
+        return jsonify({
+            "status": "success",
+            "logs": logs,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": (total + per_page - 1) // per_page
+        })
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/superadmin/attendance/live")
+@superadmin_required
+def get_live_attendance():
+    """Get recent attendance records for live monitoring"""
+    try:
+        limit = int(request.args.get("limit", 10))
+        attendance_records = list(
+            attendance_col.find()
+            .sort("timestamp", -1)
+            .limit(limit)
+        )
+        
+        for record in attendance_records:
+            record["_id"] = str(record["_id"])
+            if "person_id" in record:
+                record["person_id"] = str(record["person_id"])
+            if "timestamp" in record:
+                try:
+                    record["timestamp"] = record["timestamp"].isoformat()
+                except:
+                    pass
+        
+        return jsonify({"status": "success", "attendance": attendance_records})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/superadmin/attendance/stats")
+@superadmin_required
+def get_attendance_stats():
+    """Get attendance statistics for charts"""
+    try:
+        days = int(request.args.get("days", 30))
+        
+        # Get daily attendance for last N days
+        from datetime import timedelta
+        today = datetime.date.today()
+        daily_attendance = []
+        
+        for i in range(days):
+            date = today - timedelta(days=days - i - 1)
+            day_start = datetime.datetime.combine(date, datetime.time.min)
+            day_end = datetime.datetime.combine(date, datetime.time.max)
+            
+            count = attendance_col.count_documents({
+                "timestamp": {"$gte": day_start, "$lt": day_end}
+            })
+            
+            daily_attendance.append({
+                "date": date.isoformat(),
+                "count": count
+            })
+        
+        return jsonify({
+            "status": "success",
+            "daily_attendance": daily_attendance
+        })
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
 # ============================================================================
 # CAMERA MANAGEMENT SYSTEM
 # ============================================================================
@@ -1298,6 +1476,12 @@ def get_all_cameras():
         return jsonify({"status": "success", "cameras": cameras})
     except Exception as e:
         return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/cameras/cameras", methods=["GET"])
+@superadmin_required
+def get_cameras_alias():
+    """Alias endpoint for backward compatibility"""
+    return get_all_cameras()
 
 @app.route("/api/superadmin/cameras", methods=["POST"])
 @limiter.limit("20 per hour")

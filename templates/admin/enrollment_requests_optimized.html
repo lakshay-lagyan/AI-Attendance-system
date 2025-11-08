@@ -1,0 +1,676 @@
+{% extends "base.html" %}
+
+{% block title %}Enrollment Requests - Admin{% endblock %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/superadmin_dashboard.css') }}">
+<style>
+    .requests-container {
+        max-width: 1400px;
+        margin: 0 auto;
+    }
+    
+    .requests-grid {
+        display: grid;
+        gap: 1.5rem;
+        margin-top: 1.5rem;
+    }
+    
+    .request-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        cursor: pointer;
+        transition: all 0.3s;
+        border: 2px solid transparent;
+    }
+    
+    .request-card:hover {
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+        transform: translateY(-4px);
+        border-color: var(--sa-primary);
+    }
+    
+    .request-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 1rem;
+        padding-bottom: 1rem;
+        border-bottom: 2px solid #f3f4f6;
+    }
+    
+    .request-name {
+        font-weight: 700;
+        font-size: 1.25rem;
+        color: #1f2937;
+        margin-bottom: 0.25rem;
+    }
+    
+    .request-email {
+        color: #6b7280;
+        font-size: 0.875rem;
+    }
+    
+    .status-badge {
+        padding: 0.5rem 1rem;
+        border-radius: 999px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    
+    .status-pending {
+        background: #fef3c7;
+        color: #92400e;
+    }
+    
+    .status-approved {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    
+    .status-rejected {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    
+    .request-info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+    
+    .info-item {
+        display: flex;
+        flex-direction: column;
+    }
+    
+    .info-label {
+        color: #9ca3af;
+        font-size: 0.75rem;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        margin-bottom: 0.25rem;
+    }
+    
+    .info-value {
+        font-weight: 600;
+        color: #1f2937;
+        font-size: 1rem;
+    }
+    
+    .quality-preview {
+        display: flex;
+        gap: 0.75rem;
+        align-items: center;
+    }
+    
+    .quality-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.5rem 0.75rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 600;
+    }
+    
+    .quality-good {
+        background: #d1fae5;
+        color: #065f46;
+    }
+    
+    .quality-poor {
+        background: #fee2e2;
+        color: #991b1b;
+    }
+    
+    /* Modal Styles */
+    .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.6);
+        backdrop-filter: blur(4px);
+        display: none;
+        align-items: center;
+        justify-content: center;
+        z-index: 9999;
+        padding: 2rem;
+    }
+    
+    .modal-overlay.active {
+        display: flex;
+    }
+    
+    .modal-content {
+        background: white;
+        border-radius: 20px;
+        max-width: 1000px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+        padding: 2rem;
+        box-shadow: 0 25px 50px rgba(0,0,0,0.25);
+    }
+    
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 2rem;
+        padding-bottom: 1rem;
+        border-bottom: 3px solid #f3f4f6;
+    }
+    
+    .modal-title {
+        font-size: 1.75rem;
+        font-weight: 800;
+        color: #1f2937;
+    }
+    
+    .modal-close {
+        background: #f3f4f6;
+        border: none;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    
+    .modal-close:hover {
+        background: #e5e7eb;
+        transform: rotate(90deg);
+    }
+    
+    .image-gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 1.5rem;
+        margin: 2rem 0;
+    }
+    
+    .gallery-item {
+        position: relative;
+        border-radius: 12px;
+        overflow: hidden;
+        aspect-ratio: 1;
+        background: #1a1a1a;
+        cursor: zoom-in;
+        transition: transform 0.3s;
+    }
+    
+    .gallery-item:hover {
+        transform: scale(1.05);
+        box-shadow: 0 12px 24px rgba(0,0,0,0.2);
+    }
+    
+    .gallery-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .image-overlay {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+    
+    .action-buttons {
+        display: flex;
+        gap: 1rem;
+        margin-top: 2rem;
+        padding-top: 2rem;
+        border-top: 3px solid #f3f4f6;
+    }
+    
+    .btn-action {
+        flex: 1;
+        padding: 1rem 2rem;
+        border-radius: 12px;
+        border: none;
+        font-weight: 700;
+        font-size: 1rem;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+    }
+    
+    .btn-approve {
+        background: linear-gradient(135deg, #10b981, #059669);
+        color: white;
+    }
+    
+    .btn-approve:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(16, 185, 129, 0.3);
+    }
+    
+    .btn-reject {
+        background: linear-gradient(135deg, #ef4444, #dc2626);
+        color: white;
+    }
+    
+    .btn-reject:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(239, 68, 68, 0.3);
+    }
+    
+    .filters-card {
+        background: white;
+        border-radius: 16px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    }
+    
+    .filters-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 1rem;
+    }
+    
+    .filter-group label {
+        display: block;
+        font-size: 0.875rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        color: #374151;
+    }
+    
+    .filter-group select,
+    .filter-group input {
+        width: 100%;
+        padding: 0.75rem;
+        border: 2px solid #e5e7eb;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        transition: border 0.2s;
+    }
+    
+    .filter-group select:focus,
+    .filter-group input:focus {
+        outline: none;
+        border-color: var(--sa-primary);
+    }
+    
+    .empty-state {
+        text-align: center;
+        padding: 4rem 2rem;
+        color: #9ca3af;
+    }
+    
+    .empty-state i {
+        font-size: 4rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+    
+    .loading {
+        text-align: center;
+        padding: 3rem;
+    }
+    
+    .loading i {
+        font-size: 3rem;
+        color: var(--sa-primary);
+        animation: spin 1s linear infinite;
+    }
+    
+    @keyframes spin {
+        100% { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="sa-layout">
+    <!-- Sidebar -->
+    <div class="sa-sidebar" id="sidebar">
+        <div class="sa-sidebar-header">
+            <h2>Admin Panel</h2>
+        </div>
+        
+        <nav class="sa-sidebar-nav">
+            <a href="/admin/dashboard" class="sa-nav-item">
+                <i class="fas fa-tachometer-alt"></i>
+                <span>Dashboard</span>
+            </a>
+            <a href="/admin/enrollment-requests" class="sa-nav-item active">
+                <i class="fas fa-user-plus"></i>
+                <span>Enrollment Requests</span>
+            </a>
+            <a href="/admin/enrollment" class="sa-nav-item">
+                <i class="fas fa-id-card"></i>
+                <span>Enroll Person</span>
+            </a>
+        </nav>
+        
+        <button onclick="logout()" class="sa-logout-btn">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </button>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="sa-main">
+        <!-- Top Bar -->
+        <div class="sa-topbar">
+            <button class="sa-menu-toggle" id="menuToggle">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h1>Enrollment Requests</h1>
+            <div id="userInfo"></div>
+        </div>
+        
+        <div class="sa-content requests-container">
+            <!-- Filters -->
+            <div class="filters-card">
+                <div class="filters-grid">
+                    <div class="filter-group">
+                        <label>Status</label>
+                        <select id="filterStatus" onchange="loadRequests()">
+                            <option value="pending">Pending</option>
+                            <option value="approved">Approved</option>
+                            <option value="rejected">Rejected</option>
+                            <option value="all">All</option>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Search</label>
+                        <input type="text" id="searchQuery" placeholder="Search by name or email..." oninput="debounceSearch()">
+                    </div>
+                    <div class="filter-group">
+                        <label>Quality</label>
+                        <select id="filterQuality" onchange="loadRequests()">
+                            <option value="all">All Quality</option>
+                            <option value="good">Good Quality</option>
+                            <option value="poor">Poor Quality</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Requests Grid -->
+            <div id="requestsContainer">
+                <div class="loading">
+                    <i class="fas fa-spinner"></i>
+                    <p>Loading requests...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Detail Modal -->
+<div class="modal-overlay" id="detailModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <div>
+                <h2 class="modal-title" id="modalName"></h2>
+                <p class="request-email" id="modalEmail"></p>
+            </div>
+            <button class="modal-close" onclick="closeModal()">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+        <div id="modalBody"></div>
+    </div>
+</div>
+
+<script>
+let currentRequests = [];
+let searchTimeout;
+
+async function loadRequests() {
+    try {
+        const status = document.getElementById('filterStatus').value;
+        const container = document.getElementById('requestsContainer');
+        
+        container.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>Loading...</p></div>';
+        
+        const response = await apiRequest(`/enrollment/requests?status=${status}`);
+        const data = await response.json();
+        
+        currentRequests = data.requests || [];
+        renderRequests();
+    } catch (error) {
+        console.error('Error loading requests:', error);
+        document.getElementById('requestsContainer').innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-exclamation-circle"></i>
+                <h3>Failed to load requests</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+function renderRequests() {
+    const container = document.getElementById('requestsContainer');
+    
+    if (currentRequests.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <i class="fas fa-inbox"></i>
+                <h3>No requests found</h3>
+                <p>There are no enrollment requests matching your filters.</p>
+            </div>
+        `;
+        return;
+    }
+    
+    const html = `
+        <div class="requests-grid">
+            ${currentRequests.map(req => `
+                <div class="request-card" onclick="showDetail('${req._id}')">
+                    <div class="request-header">
+                        <div>
+                            <div class="request-name">${req.name || 'Unknown'}</div>
+                            <div class="request-email">${req.email || 'N/A'}</div>
+                        </div>
+                        <span class="status-badge status-${req.status || 'pending'}">${req.status || 'pending'}</span>
+                    </div>
+                    
+                    <div class="request-info-grid">
+                        <div class="info-item">
+                            <span class="info-label">Phone</span>
+                            <span class="info-value">${req.phone || 'N/A'}</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Images</span>
+                            <span class="info-value">${req.image_count || 0} uploaded</span>
+                        </div>
+                        <div class="info-item">
+                            <span class="info-label">Submitted</span>
+                            <span class="info-value">${new Date(req.submitted_at || Date.now()).toLocaleDateString()}</span>
+                        </div>
+                    </div>
+                    
+                    <div class="quality-preview">
+                        ${req.good_quality_count ? `
+                            <span class="quality-badge quality-good">
+                                <i class="fas fa-check-circle"></i>
+                                ${req.good_quality_count} Good
+                            </span>
+                        ` : ''}
+                        ${req.poor_quality_count ? `
+                            <span class="quality-badge quality-poor">
+                                <i class="fas fa-exclamation-triangle"></i>
+                                ${req.poor_quality_count} Poor
+                            </span>
+                        ` : ''}
+                    </div>
+                </div>
+            `).join('')}
+        </div>
+    `;
+    
+    container.innerHTML = html;
+}
+
+async function showDetail(requestId) {
+    try {
+        const response = await apiRequest(`/enrollment/requests/${requestId}`);
+        const req = await response.json();
+        
+        document.getElementById('modalName').textContent = req.name;
+        document.getElementById('modalEmail').textContent = req.email;
+        
+        let body = `
+            <div class="request-info-grid" style="margin-bottom: 2rem;">
+                <div class="info-item">
+                    <span class="info-label">Phone</span>
+                    <span class="info-value">${req.phone || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Department</span>
+                    <span class="info-value">${req.department || 'N/A'}</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Submitted</span>
+                    <span class="info-value">${new Date(req.submitted_at).toLocaleString()}</span>
+                </div>
+            </div>
+            
+            <h3 style="font-weight:700; margin-bottom:1rem;">
+                <i class="fas fa-images" style="color:var(--sa-primary);"></i> 
+                Submitted Images
+            </h3>
+            <div class="image-gallery">
+                ${(req.images || []).map((img, i) => `
+                    <div class="gallery-item" onclick="window.open('${img.url || '/static/assets/placeholder.jpg'}', '_blank')">
+                        <img src="${img.url || '/static/assets/placeholder.jpg'}" 
+                             alt="Photo ${i + 1}"
+                             onerror="this.src='/static/assets/placeholder.jpg'">
+                        <div class="image-overlay">
+                            ${img.quality ? `
+                                <span class="quality-badge quality-${img.quality}">
+                                    ${img.quality}
+                                </span>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+        
+        if (req.status === 'pending') {
+            body += `
+                <div class="action-buttons">
+                    <button class="btn-action btn-approve" onclick="approveRequest('${req._id}')">
+                        <i class="fas fa-check"></i> Approve Request
+                    </button>
+                    <button class="btn-action btn-reject" onclick="rejectRequest('${req._id}')">
+                        <i class="fas fa-times"></i> Reject Request
+                    </button>
+                </div>
+            `;
+        }
+        
+        document.getElementById('modalBody').innerHTML = body;
+        document.getElementById('detailModal').classList.add('active');
+    } catch (error) {
+        console.error('Error loading detail:', error);
+        showToast('Failed to load request details', 'error');
+    }
+}
+
+function closeModal() {
+    document.getElementById('detailModal').classList.remove('active');
+}
+
+async function approveRequest(requestId) {
+    if (!confirm('Approve this enrollment request?')) return;
+    
+    try {
+        const response = await apiRequest(`/enrollment/requests/${requestId}/approve`, {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            showToast('Request approved successfully!', 'success');
+            closeModal();
+            loadRequests();
+        } else {
+            const data = await response.json();
+            showToast(data.msg || 'Failed to approve', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error approving request', 'error');
+    }
+}
+
+async function rejectRequest(requestId) {
+    const reason = prompt('Enter rejection reason:');
+    if (!reason) return;
+    
+    try {
+        const response = await apiRequest(`/enrollment/requests/${requestId}/reject`, {
+            method: 'POST',
+            body: JSON.stringify({ reason })
+        });
+        
+        if (response.ok) {
+            showToast('Request rejected', 'success');
+            closeModal();
+            loadRequests();
+        } else {
+            const data = await response.json();
+            showToast(data.msg || 'Failed to reject', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Error rejecting request', 'error');
+    }
+}
+
+function debounceSearch() {
+    clearTimeout(searchTimeout);
+    searchTimeout = setTimeout(() => {
+        const query = document.getElementById('searchQuery').value.toLowerCase();
+        if (query) {
+            const filtered = currentRequests.filter(req => 
+                (req.name || '').toLowerCase().includes(query) ||
+                (req.email || '').toLowerCase().includes(query)
+            );
+            currentRequests = filtered;
+        }
+        renderRequests();
+    }, 300);
+}
+
+// Sidebar toggle
+document.getElementById('menuToggle').addEventListener('click', () => {
+    document.getElementById('sidebar').classList.toggle('active');
+});
+
+// Close modal on outside click
+document.getElementById('detailModal').addEventListener('click', (e) => {
+    if (e.target.id === 'detailModal') {
+        closeModal();
+    }
+});
+
+// Initialize
+document.addEventListener('DOMContentLoaded', () => {
+    loadRequests();
+});
+</script>
+{% endblock %}
