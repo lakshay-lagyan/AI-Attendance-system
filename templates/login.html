@@ -160,16 +160,16 @@
 {% block content %}
 <div class="login-container">
     <div class="bg-layer" aria-hidden="true">
-        <div class="bg-slide" id="bg-0" style="background-image: url('/static/assets/scan.jpg');"></div>
-        <div class="bg-slide hidden" id="bg-1" style="background-image: url('/static/assets/homePage2.png');"></div>
-        <div class="bg-slide hidden" id="bg-2" style="background-image: url('/static/assets/homePage4.jpeg');"></div>
+        <div class="bg-slide" id="bg-0" style="background-image: url('{{ url_for('static', filename='assets/scan.jpg') }}');"></div>
+        <div class="bg-slide hidden" id="bg-1" style="background-image: url('{{ url_for('static', filename='assets/homePage2.png') }}');"></div>
+        <div class="bg-slide hidden" id="bg-2" style="background-image: url('{{ url_for('static', filename='assets/homePage4.jpeg') }}');"></div>
         <div class="bg-dim"></div>
     </div>
 
     <!-- Left column (visual) -->
     <div class="login-left" aria-hidden="false">
         <div style="max-width: 540px; width:100%; display:flex; flex-direction:column; gap:1rem; align-items:center;">
-            <img src="/static/assets/home-page.jpg"
+            <img src="{{ url_for('static', filename='assets/home-page.jpg') }}"
                  alt="Face Recognition"
                  class="face-image"
                  id="mainFaceImage"
@@ -179,9 +179,9 @@
 
         <!-- thumbnails to switch background  -->
         <div class="bg-thumbs" id="bgThumbs" aria-label="Choose background image">
-            <div class="bg-thumb" data-index="0" style="background-image:url('/static/assets/scan.jpg');" title="Background 1"></div>
-            <div class="bg-thumb" data-index="1" style="background-image:url('/static/assets/homePage2.png');" title="Background 2"></div>
-            <div class="bg-thumb" data-index="2" style="background-image:url('/static/assets/homePage4.jpeg');" title="Background 3"></div>
+            <div class="bg-thumb" data-index="0" style="background-image:url('{{ url_for('static', filename='assets/scan.jpg') }}');" title="Background 1"></div>
+            <div class="bg-thumb" data-index="1" style="background-image:url('{{ url_for('static', filename='assets/homePage2.png') }}');" title="Background 2"></div>
+            <div class="bg-thumb" data-index="2" style="background-image:url('{{ url_for('static', filename='assets/homePage4.jpeg') }}');" title="Background 3"></div>
         </div>
     </div>
 
@@ -223,9 +223,9 @@
 <script>
 (function(){
   const homeBackgroundImages = [
-    '/static/assets/scan.jpg',
-    '/static/assets/homePage2.png',
-    '/static/assets/homePage4.jpeg'
+    '{{ url_for('static', filename='assets/scan.jpg') }}',
+    '{{ url_for('static', filename='assets/homePage2.png') }}',
+    '{{ url_for('static', filename='assets/homePage4.jpeg') }}'
   ];
 
   const slides = [];

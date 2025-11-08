@@ -11,12 +11,23 @@ import faiss
 import base64
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_login import LoginManager, UserMixin, login_user, logout_user, current_user, login_required
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 from functools import wraps
 
 from function import generate_camera_stream, get_face_embedding, continuous_learning_update, create_3d_template, extract_multi_vector_embeddings, ensemble_matching, search_face_faiss, rebuild_faiss_index
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "replace_this_with_a_real_secret")
+
+# Rate Limiter Configuration
+limiter = Limiter(
+    app=app,
+    key_func=get_remote_address,
+    default_limits=["200 per day", "50 per hour"],
+    storage_uri="memory://",
+    strategy="fixed-window"
+)
 
 # MONGODB
 MONGODB_URI = os.environ.get("MONGODB_URI")
@@ -33,6 +44,7 @@ admins_col = core["admins"]
 users_col = core["users"]  
 enrollment_requests_col = core["enrollment_requests"]
 system_logs_col = core["system_logs"]  # System logs collection
+cameras_col = core["cameras"]  # Camera management collection
 
 # FAISS Vector Database Setup
 EMBEDDING_DIM = 512
@@ -160,6 +172,7 @@ def index():
     return render_template("index.html")
 
 @app.route("/login", methods=["GET", "POST"])
+@limiter.limit("10 per minute")
 def login():
     if current_user.is_authenticated:
         if current_user.role == 'superadmin':
@@ -300,6 +313,7 @@ def reg():
     return render_template("registration_form.html")
 
 @app.route("/enroll", methods=["POST"])
+@limiter.limit("10 per hour")
 @admin_required
 def enroll():
     try:
@@ -432,6 +446,7 @@ def registration_request():
     return render_template("registration_req.html")
 
 @app.route("/submit_enrollment_request", methods=["POST"])
+@limiter.limit("5 per hour")
 def submit_enrollment_request():
     try:
         name = request.form.get("name", "").strip()
@@ -824,7 +839,9 @@ def system_stats():
 def user_dashboard():
     if current_user.role == 'admin':
         return redirect(url_for("admin_dashboard"))
-    return render_template("user_dashboard.html", user=current_user)
+    if current_user.role == 'superadmin':
+        return redirect(url_for("superadmin_dashboard"))
+    return render_template("user_dashboard_new.html", user=current_user)
 
 @app.route("/user/profile")
 @login_required
@@ -914,6 +931,7 @@ def video_feed():
                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 @app.route("/mark_attendance", methods=["POST"])
+@limiter.limit("100 per hour")
 @admin_required
 def mark_attendance():
     file = request.files.get("file")
@@ -1091,6 +1109,322 @@ def superadmin_system_stats():
         return jsonify(stats)
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+# ============================================================================
+# CAMERA MANAGEMENT SYSTEM
+# ============================================================================
+
+# Global dictionary to track active camera streams
+active_camera_streams = {}
+camera_stream_locks = {}
+
+@app.route("/api/superadmin/cameras", methods=["GET"])
+@superadmin_required
+def get_all_cameras():
+    """Get all cameras with their status"""
+    try:
+        cameras = list(cameras_col.find({}))
+        for cam in cameras:
+            cam["_id"] = str(cam["_id"])
+            if "created_at" in cam:
+                try:
+                    cam["created_at"] = cam["created_at"].isoformat()
+                except:
+                    pass
+            if "last_seen" in cam:
+                try:
+                    cam["last_seen"] = cam["last_seen"].isoformat()
+                except:
+                    pass
+            # Add stream status
+            cam["stream_active"] = cam["_id"] in active_camera_streams
+        return jsonify({"status": "success", "cameras": cameras})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/cameras", methods=["POST"])
+@limiter.limit("20 per hour")
+@superadmin_required
+def create_camera():
+    """Create new camera configuration"""
+    try:
+        name = request.form.get("name", "").strip()
+        source_type = request.form.get("source_type", "opencv")  # opencv/int or stream/url
+        source = request.form.get("source", "0")  # int for device index or URL
+        
+        # Optional configuration
+        auth_username = request.form.get("auth_username", "")
+        auth_password = request.form.get("auth_password", "")
+        fps = int(request.form.get("fps", 30))
+        resolution_width = int(request.form.get("resolution_width", 640))
+        resolution_height = int(request.form.get("resolution_height", 480))
+        
+        if not name:
+            return jsonify({"status": "failed", "msg": "Camera name required"}), 400
+        
+        # Check if camera name exists
+        if cameras_col.find_one({"name": name}):
+            return jsonify({"status": "failed", "msg": "Camera name already exists"}), 400
+        
+        # Parse source (convert to int if it's a device index)
+        if source_type == "opencv":
+            try:
+                source = int(source)
+            except:
+                source = 0
+        
+        camera_id = f"{datetime.datetime.utcnow().timestamp()}_{name.replace(' ', '_')}"
+        
+        camera_doc = {
+            "_id": camera_id,
+            "name": name,
+            "source_type": source_type,
+            "source": source,
+            "auth": {
+                "username": auth_username,
+                "password": auth_password
+            } if auth_username else None,
+            "config": {
+                "fps": fps,
+                "resolution": {"width": resolution_width, "height": resolution_height},
+                "detection_roi": None,  # Can be set later for specific area detection
+                "fallback_timeout": 30  # seconds before considering stream dead
+            },
+            "enabled": True,
+            "last_seen": None,
+            "created_at": datetime.datetime.utcnow(),
+            "created_by": current_user.email,
+            "stream_url": f"/camera_feed/{camera_id}"
+        }
+        
+        cameras_col.insert_one(camera_doc)
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "create_camera",
+            "camera_id": camera_id,
+            "camera_name": name,
+            "performed_by": current_user.email,
+            "timestamp": datetime.datetime.utcnow()
+        })
+        
+        return jsonify({"status": "success", "msg": f"Camera '{name}' created", "camera_id": camera_id})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/cameras/<camera_id>", methods=["PUT"])
+@superadmin_required
+def update_camera(camera_id):
+    """Update camera configuration"""
+    try:
+        camera = cameras_col.find_one({"_id": camera_id})
+        if not camera:
+            return jsonify({"status": "failed", "msg": "Camera not found"}), 404
+        
+        update_data = {}
+        
+        if "name" in request.form:
+            update_data["name"] = request.form.get("name").strip()
+        if "source_type" in request.form:
+            update_data["source_type"] = request.form.get("source_type")
+        if "source" in request.form:
+            source = request.form.get("source")
+            if update_data.get("source_type", camera["source_type"]) == "opencv":
+                try:
+                    source = int(source)
+                except:
+                    source = 0
+            update_data["source"] = source
+        if "enabled" in request.form:
+            update_data["enabled"] = request.form.get("enabled").lower() == "true"
+        
+        # Update config if provided
+        if any(k in request.form for k in ["fps", "resolution_width", "resolution_height"]):
+            config = camera.get("config", {})
+            if "fps" in request.form:
+                config["fps"] = int(request.form.get("fps"))
+            if "resolution_width" in request.form or "resolution_height" in request.form:
+                resolution = config.get("resolution", {})
+                if "resolution_width" in request.form:
+                    resolution["width"] = int(request.form.get("resolution_width"))
+                if "resolution_height" in request.form:
+                    resolution["height"] = int(request.form.get("resolution_height"))
+                config["resolution"] = resolution
+            update_data["config"] = config
+        
+        if update_data:
+            update_data["updated_at"] = datetime.datetime.utcnow()
+            update_data["updated_by"] = current_user.email
+            cameras_col.update_one({"_id": camera_id}, {"$set": update_data})
+            
+            # Log action
+            system_logs_col.insert_one({
+                "action": "update_camera",
+                "camera_id": camera_id,
+                "changes": list(update_data.keys()),
+                "performed_by": current_user.email,
+                "timestamp": datetime.datetime.utcnow()
+            })
+        
+        return jsonify({"status": "success", "msg": "Camera updated"})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/cameras/<camera_id>", methods=["DELETE"])
+@superadmin_required
+def delete_camera(camera_id):
+    """Delete camera"""
+    try:
+        # Stop stream if active
+        if camera_id in active_camera_streams:
+            stop_camera_stream(camera_id)
+        
+        result = cameras_col.delete_one({"_id": camera_id})
+        if result.deleted_count > 0:
+            # Log action
+            system_logs_col.insert_one({
+                "action": "delete_camera",
+                "camera_id": camera_id,
+                "performed_by": current_user.email,
+                "timestamp": datetime.datetime.utcnow()
+            })
+            return jsonify({"status": "success", "msg": "Camera deleted"})
+        return jsonify({"status": "failed", "msg": "Camera not found"}), 404
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/cameras/<camera_id>/start", methods=["POST"])
+@superadmin_required
+def start_camera_stream_endpoint(camera_id):
+    """Start camera streaming"""
+    try:
+        camera = cameras_col.find_one({"_id": camera_id})
+        if not camera:
+            return jsonify({"status": "failed", "msg": "Camera not found"}), 404
+        
+        if not camera.get("enabled"):
+            return jsonify({"status": "failed", "msg": "Camera is disabled"}), 400
+        
+        if camera_id in active_camera_streams:
+            return jsonify({"status": "success", "msg": "Camera stream already active"})
+        
+        # Start stream in background thread
+        import threading
+        thread = threading.Thread(target=initialize_camera_stream, args=(camera_id, camera))
+        thread.daemon = True
+        thread.start()
+        
+        return jsonify({"status": "success", "msg": "Camera stream started", "stream_url": f"/camera_feed/{camera_id}"})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/cameras/<camera_id>/stop", methods=["POST"])
+@superadmin_required
+def stop_camera_stream_endpoint(camera_id):
+    """Stop camera streaming"""
+    try:
+        stop_camera_stream(camera_id)
+        return jsonify({"status": "success", "msg": "Camera stream stopped"})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+def initialize_camera_stream(camera_id, camera):
+    """Initialize camera capture in background thread"""
+    try:
+        source = camera["source"]
+        config = camera.get("config", {})
+        
+        # Open camera
+        cap = cv.VideoCapture(source)
+        
+        if not cap.isOpened():
+            print(f"[Camera {camera_id}] Failed to open camera source: {source}")
+            return
+        
+        # Set resolution if specified
+        resolution = config.get("resolution", {})
+        if resolution.get("width"):
+            cap.set(cv.CAP_PROP_FRAME_WIDTH, resolution["width"])
+        if resolution.get("height"):
+            cap.set(cv.CAP_PROP_FRAME_HEIGHT, resolution["height"])
+        if config.get("fps"):
+            cap.set(cv.CAP_PROP_FPS, config["fps"])
+        
+        # Store capture object
+        import threading
+        active_camera_streams[camera_id] = cap
+        camera_stream_locks[camera_id] = threading.Lock()
+        
+        # Update last_seen
+        cameras_col.update_one(
+            {"_id": camera_id},
+            {"$set": {"last_seen": datetime.datetime.utcnow()}}
+        )
+        
+        print(f"[Camera {camera_id}] Stream initialized: {camera['name']}")
+    except Exception as e:
+        print(f"[Camera {camera_id}] Error initializing stream: {e}")
+
+def stop_camera_stream(camera_id):
+    """Stop camera stream and release resources"""
+    try:
+        if camera_id in active_camera_streams:
+            cap = active_camera_streams[camera_id]
+            cap.release()
+            del active_camera_streams[camera_id]
+            
+        if camera_id in camera_stream_locks:
+            del camera_stream_locks[camera_id]
+            
+        print(f"[Camera {camera_id}] Stream stopped")
+    except Exception as e:
+        print(f"[Camera {camera_id}] Error stopping stream: {e}")
+
+@app.route("/camera_feed/<camera_id>")
+@superadmin_required
+def camera_feed(camera_id):
+    """Streaming endpoint for camera feed"""
+    def generate_frames(camera_id):
+        """Generate frames from camera"""
+        while camera_id in active_camera_streams:
+            try:
+                cap = active_camera_streams[camera_id]
+                lock = camera_stream_locks.get(camera_id)
+                
+                if lock:
+                    with lock:
+                        success, frame = cap.read()
+                else:
+                    success, frame = cap.read()
+                
+                if not success:
+                    print(f"[Camera {camera_id}] Failed to read frame")
+                    break
+                
+                # Encode frame as JPEG
+                ret, buffer = cv.imencode('.jpg', frame, [cv.IMWRITE_JPEG_QUALITY, 80])
+                if not ret:
+                    continue
+                
+                frame_bytes = buffer.tobytes()
+                
+                # Update last_seen timestamp periodically
+                cameras_col.update_one(
+                    {"_id": camera_id},
+                    {"$set": {"last_seen": datetime.datetime.utcnow()}}
+                )
+                
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+            except Exception as e:
+                print(f"[Camera {camera_id}] Frame generation error: {e}")
+                break
+        
+        # Clean up when stream ends
+        stop_camera_stream(camera_id)
+    
+    return Response(generate_frames(camera_id),
+                   mimetype='multipart/x-mixed-replace; boundary=frame')
 
 # Health check endpoint for Railway
 @app.route("/health")

@@ -1,0 +1,389 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - {{ user.name }}{% endblock %}
+
+{% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/user_dashboard.css') }}">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block content %}
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+        <div class="sidebar-logo">
+            <div class="sidebar-logo-icon">
+                <i class="fas fa-robot"></i>
+            </div>
+            <div class="sidebar-logo-text">
+                <h2>Smart Attendance</h2>
+                <p>User Portal</p>
+            </div>
+        </div>
+    </div>
+    
+    <nav class="sidebar-nav">
+        <div class="nav-section">
+            <h3 class="nav-section-title">Main</h3>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="{{ url_for('user_dashboard') }}" class="nav-link active">
+                        <i class="fas fa-th-large nav-icon"></i>
+                        <span>Dashboard</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="{{ url_for('user_profile') }}" class="nav-link">
+                        <i class="fas fa-user nav-icon"></i>
+                        <span>My Profile</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="nav-section">
+            <h3 class="nav-section-title">Attendance</h3>
+            <ul class="nav-menu">
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-calendar-check nav-icon"></i>
+                        <span>My Attendance</span>
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a href="#" class="nav-link">
+                        <i class="fas fa-chart-line nav-icon"></i>
+                        <span>Statistics</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+    
+    <div class="sidebar-footer">
+        <div class="sidebar-profile">
+            <div class="sidebar-profile-avatar">
+                {% if user.profile_image %}
+                    <img src="data:image/jpeg;base64,{{ user.profile_image }}" alt="{{ user.name }}" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover;">
+                {% else %}
+                    {{ user.name[0].upper() }}
+                {% endif %}
+            </div>
+            <div class="sidebar-profile-info">
+                <p class="sidebar-profile-name">{{ user.name }}</p>
+                <p class="sidebar-profile-role">{{ user.department or 'User' }}</p>
+            </div>
+        </div>
+        <button onclick="logout()" class="btn-logout">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </button>
+    </div>
+</aside>
+
+<!-- Sidebar Overlay (Mobile) -->
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
+<!-- Mobile Toggle Button -->
+<button class="sidebar-toggle" id="sidebarToggle" onclick="toggleSidebar()">
+    <i class="fas fa-bars"></i>
+</button>
+
+<!-- Main Content -->
+<main class="main-content">
+    <!-- Top Bar -->
+    <div class="topbar">
+        <div class="topbar-left">
+            <h1>Welcome back, {{ user.name.split()[0] }}!</h1>
+            <p>Here's your attendance overview</p>
+        </div>
+        <div class="topbar-right">
+            <div class="topbar-action" title="Notifications">
+                <i class="fas fa-bell"></i>
+                <span class="topbar-action-badge" id="notificationBadge">0</span>
+            </div>
+            <div class="topbar-action" title="Settings">
+                <i class="fas fa-cog"></i>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Dashboard Content -->
+    <div class="dashboard-content">
+        <!-- Stats Grid -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-label">Total Days</span>
+                    <div class="stat-icon primary">
+                        <i class="fas fa-calendar"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="totalDays">0</div>
+                <div class="stat-trend up">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>This month</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-label">Present Days</span>
+                    <div class="stat-icon success">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="presentDays">0</div>
+                <div class="stat-trend up">
+                    <i class="fas fa-arrow-up"></i>
+                    <span id="attendancePercent">0%</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-label">Absent Days</span>
+                    <div class="stat-icon warning">
+                        <i class="fas fa-times-circle"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="absentDays">0</div>
+                <div class="stat-trend">
+                    <i class="fas fa-minus"></i>
+                    <span>This month</span>
+                </div>
+            </div>
+            
+            <div class="stat-card">
+                <div class="stat-header">
+                    <span class="stat-label">Attendance Rate</span>
+                    <div class="stat-icon info">
+                        <i class="fas fa-percentage"></i>
+                    </div>
+                </div>
+                <div class="stat-value" id="attendanceRate">0%</div>
+                <div class="stat-trend up">
+                    <i class="fas fa-arrow-up"></i>
+                    <span>Keep it up!</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Charts Row -->
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
+            <!-- Attendance Chart -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">Attendance Trends</h3>
+                    <div class="chart-actions">
+                        <button class="chart-btn active" onclick="loadChartData(7)">7D</button>
+                        <button class="chart-btn" onclick="loadChartData(30)">30D</button>
+                        <button class="chart-btn" onclick="loadChartData(90)">90D</button>
+                    </div>
+                </div>
+                <canvas id="attendanceChart" height="80"></canvas>
+            </div>
+            
+            <!-- Recent Activity -->
+            <div class="chart-card">
+                <div class="chart-header">
+                    <h3 class="chart-title">Recent Activity</h3>
+                </div>
+                <ul class="activity-list" id="activityList">
+                    <li style="text-align: center; padding: 2rem; color: #9ca3af;">
+                        <i class="fas fa-spinner fa-spin"></i>
+                        <p>Loading...</p>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</main>
+
+<script>
+// Global Chart Instance
+let attendanceChart = null;
+
+// Sidebar Toggle
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    sidebar.classList.toggle('mobile-open');
+    overlay.classList.toggle('active');
+}
+
+// Load Dashboard Stats
+async function loadStats() {
+    try {
+        const response = await apiRequest('/api/user/attendance_stats?days=30');
+        
+        document.getElementById('totalDays').textContent = response.total_days;
+        document.getElementById('presentDays').textContent = response.present_days;
+        document.getElementById('absentDays').textContent = response.total_days - response.present_days;
+        document.getElementById('attendanceRate').textContent = response.percentage.toFixed(1) + '%';
+        document.getElementById('attendancePercent').textContent = response.percentage.toFixed(1) + '%';
+    } catch (error) {
+        console.error('Error loading stats:', error);
+        showToast('Failed to load statistics', 'error');
+    }
+}
+
+// Load Recent Activity
+async function loadActivity() {
+    try {
+        const response = await apiRequest('/api/user/attendance_history');
+        const activityList = document.getElementById('activityList');
+        
+        if (response.length === 0) {
+            activityList.innerHTML = `
+                <li style="text-align: center; padding: 2rem; color: #9ca3af;">
+                    <i class="fas fa-inbox"></i>
+                    <p>No recent activity</p>
+                </li>
+            `;
+            return;
+        }
+        
+        activityList.innerHTML = response.slice(0, 5).map(record => {
+            const date = new Date(record.timestamp);
+            const timeAgoStr = timeAgo(record.timestamp);
+            
+            return `
+                <li class="activity-item">
+                    <div class="activity-icon success">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="activity-info">
+                        <p class="activity-title">Attendance Marked</p>
+                        <p class="activity-time">${timeAgoStr}</p>
+                    </div>
+                    <span class="activity-badge success">${(record.confidence * 100).toFixed(0)}%</span>
+                </li>
+            `;
+        }).join('');
+    } catch (error) {
+        console.error('Error loading activity:', error);
+    }
+}
+
+// Load Chart Data
+async function loadChartData(days = 30) {
+    try {
+        showLoading();
+        
+        // Update active button
+        document.querySelectorAll('.chart-btn').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        event.target.classList.add('active');
+        
+        // Fetch data (you'll need to implement this endpoint)
+        const labels = [];
+        const data = [];
+        
+        // Generate dummy data for now
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+        
+        for (let i = 0; i < days; i++) {
+            const date = new Date(startDate);
+            date.setDate(date.getDate() + i);
+            labels.push(date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+            data.push(Math.random() > 0.3 ? 1 : 0);
+        }
+        
+        updateChart(labels, data);
+    } catch (error) {
+        console.error('Error loading chart:', error);
+    } finally {
+        hideLoading();
+    }
+}
+
+// Update Chart
+function updateChart(labels, data) {
+    const ctx = document.getElementById('attendanceChart').getContext('2d');
+    
+    if (attendanceChart) {
+        attendanceChart.destroy();
+    }
+    
+    attendanceChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Attendance',
+                data: data,
+                borderColor: '#667eea',
+                backgroundColor: 'rgba(102, 126, 234, 0.1)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.4,
+                pointRadius: 3,
+                pointHoverRadius: 5,
+                pointBackgroundColor: '#667eea',
+                pointBorderColor: '#fff',
+                pointBorderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                },
+                tooltip: {
+                    backgroundColor: '#1f2937',
+                    padding: 12,
+                    titleColor: '#fff',
+                    bodyColor: '#fff',
+                    borderColor: '#374151',
+                    borderWidth: 1,
+                    displayColors: false,
+                    callbacks: {
+                        label: function(context) {
+                            return context.parsed.y === 1 ? 'Present' : 'Absent';
+                        }
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 1,
+                    ticks: {
+                        stepSize: 1,
+                        callback: function(value) {
+                            return value === 1 ? 'Present' : 'Absent';
+                        }
+                    },
+                    grid: {
+                        color: '#f3f4f6'
+                    }
+                },
+                x: {
+                    grid: {
+                        display: false
+                    }
+                }
+            }
+        }
+    });
+}
+
+// Initialize Dashboard
+document.addEventListener('DOMContentLoaded', function() {
+    loadStats();
+    loadActivity();
+    loadChartData(30);
+    
+    // Auto-refresh every 5 minutes
+    setInterval(() => {
+        loadStats();
+        loadActivity();
+    }, 300000);
+});
+</script>
+{% endblock %}

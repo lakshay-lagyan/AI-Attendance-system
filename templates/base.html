@@ -7,7 +7,8 @@
     <title>{% block title %}Smart Attendance System{% endblock %}</title>
     
     <!-- Favicon -->
-    <link rel="icon" type="image/png" href="/static/assets/favicon.png">
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='assets/favicon.svg') }}">
+    <link rel="icon" type="image/png" href="{{ url_for('static', filename='assets/favicon.png') }}">
     
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -18,8 +19,8 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <!-- Custom 3D CSS Framework -->
-    <link rel="stylesheet" href="/static/css/custom-3d.css">
-    <link rel="stylesheet" href="/static/css/sidebar-3d.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom-3d.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar-3d.css') }}">
     
     {% block extra_styles %}{% endblock %}
 </head>
