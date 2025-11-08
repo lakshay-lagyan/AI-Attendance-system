@@ -287,6 +287,27 @@ def create_admin():
     return jsonify({"status": "success", "msg": "Admin created"}), 201
 
 # --- Admin Routes ---
+@app.route("/admin/dashboard")
+@admin_required
+def admin_dashboard():
+    """Admin Dashboard"""
+    total_users = persons_col.count_documents({})
+    total_attendance = attendance_col.count_documents({})
+    pending_requests = enrollment_requests_col.count_documents({"status": "pending"})
+    today_attendance = attendance_col.count_documents({
+        "timestamp": {
+            "$gte": datetime.datetime.combine(datetime.date.today(), datetime.time.min),
+            "$lt": datetime.datetime.combine(datetime.date.today(), datetime.time.max)
+        }
+    })
+    
+    return render_template("admin_dashboard.html",
+                         admin=current_user,
+                         total_users=total_users,
+                         total_attendance=total_attendance,
+                         pending_requests=pending_requests,
+                         today_attendance=today_attendance)
+
 @app.route("/superadmin/stats")
 @superadmin_required
 def superadmin_stats_api():
@@ -872,6 +893,102 @@ def system_stats():
     except Exception as e:
         print(f"[System Stats Error] {e}")
         return jsonify({"error": str(e)}), 500
+
+# --- Mobile Camera Routes ---
+@app.route("/mobile/capture")
+def mobile_capture():
+    """Mobile camera capture page - accessible without login for quick attendance"""
+    return render_template("mobile_capture.html")
+
+@app.route("/api/mobile/mark_attendance", methods=["POST"])
+@limiter.limit("20 per hour")
+def mobile_mark_attendance():
+    """Mark attendance from mobile camera capture"""
+    try:
+        file = request.files.get("file")
+        if not file:
+            return jsonify({"status": "failed", "msg": "No image provided"}), 400
+        
+        # Get face embedding
+        embedding = get_face_embedding(file)
+        if embedding is None:
+            return jsonify({"status": "failed", "msg": "No face detected. Please ensure your face is clearly visible and try again."}), 400
+        
+        # Search in FAISS
+        if face_index is None or face_index.ntotal == 0:
+            return jsonify({"status": "failed", "msg": "System not initialized. Please contact administrator."}), 500
+        
+        D, I = face_index.search(np.array([embedding]), k=1)
+        
+        MATCH_THRESHOLD = 0.6
+        if len(I[0]) == 0 or D[0][0] > MATCH_THRESHOLD:
+            return jsonify({
+                "status": "failed",
+                "msg": "Face not recognized. Please enroll first or contact administrator."
+            }), 404
+        
+        person_id = index_to_person_id.get(I[0][0])
+        if not person_id:
+            return jsonify({"status": "failed", "msg": "Person not found in database"}), 404
+        
+        # Get person details
+        person = persons_col.find_one({"_id": person_id})
+        if not person:
+            return jsonify({"status": "failed", "msg": "Person data not found"}), 404
+        
+        # Check if already marked today
+        today_start = datetime.datetime.combine(datetime.date.today(), datetime.time.min)
+        existing = attendance_col.find_one({
+            "person_id": person_id,
+            "timestamp": {"$gte": today_start}
+        })
+        
+        if existing:
+            return jsonify({
+                "status": "success",
+                "message": "Attendance already marked for today",
+                "person_name": person.get("name", "Unknown"),
+                "time": existing["timestamp"].strftime("%I:%M %p"),
+                "confidence": round(existing.get("confidence", 0) * 100, 2)
+            })
+        
+        # Mark attendance
+        confidence = float(1.0 - D[0][0])
+        attendance_col.insert_one({
+            "person_id": person_id,
+            "person_name": person.get("name", "Unknown"),
+            "email": person.get("email", ""),
+            "department": person.get("department", ""),
+            "timestamp": datetime.datetime.utcnow(),
+            "confidence": confidence,
+            "device": "mobile",
+            "user_agent": request.headers.get("User-Agent", ""),
+            "location": request.headers.get("X-Forwarded-For", request.remote_addr)
+        })
+        
+        # Log attendance event
+        system_logs_col.insert_one({
+            "action": "mobile_attendance",
+            "person_id": str(person_id),
+            "person_name": person.get("name", "Unknown"),
+            "confidence": confidence,
+            "device": "mobile",
+            "timestamp": datetime.datetime.utcnow()
+        })
+        
+        return jsonify({
+            "status": "success",
+            "message": "Attendance marked successfully!",
+            "person_name": person.get("name", "Unknown"),
+            "time": datetime.datetime.now().strftime("%I:%M %p"),
+            "confidence": round(confidence * 100, 2)
+        })
+        
+    except Exception as e:
+        print(f"[Mobile Attendance Error] {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "failed", "msg": "Server error. Please try again or contact administrator."}), 500
 
 # --- User Routes ---
 @app.route("/user/dashboard")
