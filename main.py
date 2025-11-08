@@ -287,11 +287,6 @@ def create_admin():
     return jsonify({"status": "success", "msg": "Admin created"}), 201
 
 # --- Admin Routes ---
-@app.route("/superadmin/dashboard")
-@superadmin_required
-def superadmin_dashboard():
-    return render_template("superadmin/dashboard.html")
-
 @app.route("/superadmin/stats")
 @superadmin_required
 def superadmin_stats_api():
