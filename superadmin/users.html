@@ -1,0 +1,237 @@
+{% extends "base.html" %}
+
+{% block title %}All Users - Super Admin{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .sidebar { transition: transform 0.3s ease; }
+    @media (max-width: 768px) {
+        .sidebar.hidden-mobile { transform: translateX(-100%); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex h-screen bg-gray-100">
+    <div id="sidebar" class="sidebar fixed md:static w-64 bg-gradient-to-b from-purple-600 to-purple-900 text-white h-full z-50">
+        <div class="p-6 border-b border-purple-500">
+            <h1 class="text-2xl font-bold">Super Admin</h1>
+        </div>
+        
+        <nav class="p-4">
+            <a href="/superadmin/dashboard" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-dashboard mr-3"></i> Dashboard
+            </a>
+            <a href="/superadmin/admins" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-user-shield mr-3"></i> Manage Admins
+            </a>
+            <a href="/superadmin/users" class="flex items-center p-3 mb-2 bg-purple-700 rounded-lg">
+                <i class="fas fa-users mr-3"></i> All Users
+            </a>
+            <a href="/superadmin/logs" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-file-alt mr-3"></i> System Logs
+            </a>
+            <button onclick="logout()" class="w-full flex items-center p-3 mt-4 hover:bg-red-600 rounded-lg">
+                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            </button>
+        </nav>
+    </div>
+    
+    <div class="flex-1 overflow-auto">
+        <div class="bg-white shadow-sm p-4 flex justify-between items-center">
+            <button id="menuToggle" class="md:hidden text-gray-600">
+                <i class="fas fa-bars text-2xl"></i>
+            </button>
+            <h2 class="text-2xl font-bold text-gray-800">All Users</h2>
+            <div class="flex gap-2">
+                <input type="text" id="searchInput" placeholder="Search users..." class="px-3 py-2 border rounded-lg">
+                <button onclick="loadUsers()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                    <i class="fas fa-sync-alt"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-4 md:p-6">
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Total Users</p>
+                            <p id="totalUsers" class="text-2xl font-bold text-gray-800">0</p>
+                        </div>
+                        <i class="fas fa-users text-3xl text-blue-500"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Active Users</p>
+                            <p id="activeUsers" class="text-2xl font-bold text-green-600">0</p>
+                        </div>
+                        <i class="fas fa-check-circle text-3xl text-green-500"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Enrolled</p>
+                            <p id="enrolledUsers" class="text-2xl font-bold text-purple-600">0</p>
+                        </div>
+                        <i class="fas fa-user-check text-3xl text-purple-500"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-4 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Pending</p>
+                            <p id="pendingUsers" class="text-2xl font-bold text-yellow-600">0</p>
+                        </div>
+                        <i class="fas fa-clock text-3xl text-yellow-500"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-white rounded-lg shadow">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="p-4 text-left">Name</th>
+                                <th class="p-4 text-left">Email</th>
+                                <th class="p-4 text-left hidden md:table-cell">Department</th>
+                                <th class="p-4 text-left">Status</th>
+                                <th class="p-4 text-left">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable" class="divide-y">
+                            <tr><td colspan="5" class="p-4 text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let users = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('sidebar');
+    const menuToggle = document.getElementById('menuToggle');
+    
+    menuToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('hidden-mobile');
+    });
+    
+    document.getElementById('searchInput').addEventListener('input', filterUsers);
+    
+    loadUsers();
+});
+
+async function loadUsers() {
+    try {
+        const response = await apiRequest('/api/superadmin/users');
+        const data = await response.json();
+        
+        if (response.ok) {
+            users = data.users || [];
+            displayUsers(users);
+            updateStats(users);
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+function updateStats(usersList) {
+    document.getElementById('totalUsers').textContent = usersList.length;
+    document.getElementById('activeUsers').textContent = usersList.filter(u => u.is_active).length;
+    document.getElementById('enrolledUsers').textContent = usersList.filter(u => u.is_enrolled).length;
+    document.getElementById('pendingUsers').textContent = usersList.filter(u => !u.is_enrolled).length;
+}
+
+function displayUsers(usersList) {
+    const tbody = document.getElementById('usersTable');
+    
+    if (usersList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No users found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = usersList.map(user => `
+        <tr class="hover:bg-gray-50">
+            <td class="p-4">
+                <div class="flex items-center">
+                    <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                        <i class="fas fa-user text-purple-600"></i>
+                    </div>
+                    <div>
+                        <div class="font-medium">${user.name}</div>
+                    </div>
+                </div>
+            </td>
+            <td class="p-4">${user.email}</td>
+            <td class="p-4 hidden md:table-cell">${user.department || 'N/A'}</td>
+            <td class="p-4">
+                <div class="flex flex-col gap-1">
+                    <span class="px-2 py-1 rounded text-xs font-medium ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                        ${user.is_active ? 'Active' : 'Inactive'}
+                    </span>
+                    ${user.is_enrolled ? '<span class="px-2 py-1 rounded text-xs font-medium bg-purple-100 text-purple-800">Enrolled</span>' : '<span class="px-2 py-1 rounded text-xs font-medium bg-yellow-100 text-yellow-800">Pending</span>'}
+                </div>
+            </td>
+            <td class="p-4">
+                <button onclick="toggleUserStatus(${user.id})" class="text-blue-600 hover:text-blue-800 mr-2" title="${user.is_active ? 'Deactivate' : 'Activate'}">
+                    <i class="fas fa-${user.is_active ? 'ban' : 'check-circle'}"></i>
+                </button>
+                <button onclick="viewUser(${user.id})" class="text-green-600 hover:text-green-800" title="View Details">
+                    <i class="fas fa-eye"></i>
+                </button>
+            </td>
+        </tr>
+    `).join('');
+}
+
+function filterUsers() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const filtered = users.filter(u => 
+        u.name.toLowerCase().includes(search) || 
+        u.email.toLowerCase().includes(search) ||
+        (u.department && u.department.toLowerCase().includes(search))
+    );
+    displayUsers(filtered);
+}
+
+async function toggleUserStatus(id) {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    
+    if (!confirm(`Are you sure you want to ${user.is_active ? 'deactivate' : 'activate'} this user?`)) return;
+    
+    try {
+        const response = await apiRequest(`/api/superadmin/users/${id}`, {
+            method: 'PUT',
+            body: JSON.stringify({ is_active: !user.is_active })
+        });
+        
+        if (response.ok) {
+            showToast(`User ${user.is_active ? 'deactivated' : 'activated'}`, 'success');
+            loadUsers();
+        } else {
+            showToast('Operation failed', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Operation failed', 'error');
+    }
+}
+
+function viewUser(id) {
+    const user = users.find(u => u.id === id);
+    if (!user) return;
+    
+    alert(`User Details:\n\nName: ${user.name}\nEmail: ${user.email}\nDepartment: ${user.department || 'N/A'}\nPhone: ${user.phone || 'N/A'}\nStatus: ${user.is_active ? 'Active' : 'Inactive'}\nEnrolled: ${user.is_enrolled ? 'Yes' : 'No'}`);
+}
+</script>
+{% endblock %}

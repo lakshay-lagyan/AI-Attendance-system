@@ -28,9 +28,11 @@ attendance_col = transactional_db["attendance"]
 core = client['secure_db']
 persons_col = core["persons"]
 profile_col = core["profile"]
+superadmins_col = core["superadmins"]  # Super Admin collection
 admins_col = core["admins"]
 users_col = core["users"]  
 enrollment_requests_col = core["enrollment_requests"]
+system_logs_col = core["system_logs"]  # System logs collection
 
 # FAISS Vector Database Setup
 EMBEDDING_DIM = 512
@@ -64,6 +66,15 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = "login"
 
+class SuperAdminUser(UserMixin):
+    def __init__(self, doc):
+        self.doc = doc
+        self.id = str(doc.get("_id"))
+        self.email = doc.get("email")
+        self.name = doc.get("name", "Super Admin")
+        self.role = "superadmin"
+        self.profile_image = doc.get("profile_image", "")
+
 class AdminUser(UserMixin):
     def __init__(self, doc):
         self.doc = doc
@@ -86,7 +97,12 @@ class RegularUser(UserMixin):
 
 @login_manager.user_loader
 def load_user(user_id):
-    # Try admin first
+    # Try super admin first
+    doc = superadmins_col.find_one({"_id": user_id})
+    if doc:
+        return SuperAdminUser(doc)
+    
+    # Try admin
     doc = admins_col.find_one({"_id": user_id})
     if doc:
         return AdminUser(doc)
@@ -99,6 +115,9 @@ def load_user(user_id):
     # Fallback with ObjectId
     from bson.objectid import ObjectId
     try:
+        doc = superadmins_col.find_one({"_id": ObjectId(user_id)})
+        if doc:
+            return SuperAdminUser(doc)
         doc = admins_col.find_one({"_id": ObjectId(user_id)})
         if doc:
             return AdminUser(doc)
@@ -109,11 +128,21 @@ def load_user(user_id):
         pass
     return None
 
+def superadmin_required(f):
+    @wraps(f)
+    @login_required
+    def decorated_function(*args, **kwargs):
+        if current_user.role != 'superadmin':
+            flash('Access denied. Super Admin privileges required.', 'danger')
+            return redirect(url_for('index'))
+        return f(*args, **kwargs)
+    return decorated_function
+
 def admin_required(f):
     @wraps(f)
     @login_required
     def decorated_function(*args, **kwargs):
-        if current_user.role != 'admin':
+        if current_user.role not in ['admin', 'superadmin']:
             flash('Access denied. Admin privileges required.', 'oops!')
             return redirect(url_for('user_dashboard'))
         return f(*args, **kwargs)
@@ -123,15 +152,19 @@ def admin_required(f):
 @app.route("/")
 def index():
     if current_user.is_authenticated:
-        if current_user.role == 'admin':
+        if current_user.role == 'superadmin':
+            return redirect(url_for("superadmin_dashboard"))
+        elif current_user.role == 'admin':
             return redirect(url_for("admin_dashboard"))
         return redirect(url_for("user_dashboard"))
-    return redirect(url_for("login"))
+    return render_template("index.html")
 
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if current_user.is_authenticated:
-        if current_user.role == 'admin':
+        if current_user.role == 'superadmin':
+            return redirect(url_for("superadmin_dashboard"))
+        elif current_user.role == 'admin':
             return redirect(url_for("admin_dashboard"))
         return redirect(url_for("user_dashboard"))
     
@@ -145,6 +178,15 @@ def login():
     if not email or not password:
         flash("Email and password required.", "danger")
         return redirect(url_for("login"))
+    
+    # Check super admin first
+    superadmin = superadmins_col.find_one({"email": email})
+    if superadmin:
+        hashed = superadmin.get("password_hash")
+        if hashed and check_password_hash(hashed, password):
+            user = SuperAdminUser(superadmin)
+            login_user(user, remember=remember)
+            return redirect(url_for("superadmin_dashboard"))
     
     # Check admin
     admin = admins_col.find_one({"email": email})
@@ -908,6 +950,148 @@ def mark_attendance():
     
     return jsonify({"status": "failed", "msg": "No match found"}), 404
 
+# --- Super Admin Routes ---
+@app.route("/superadmin/dashboard")
+@superadmin_required
+def superadmin_dashboard():
+    """Super Admin Dashboard"""
+    total_admins = admins_col.count_documents({})
+    total_users = persons_col.count_documents({})
+    total_attendance = attendance_col.count_documents({})
+    pending_requests = enrollment_requests_col.count_documents({"status": "pending"})
+    
+    return render_template("superadmin/dashboard.html", 
+                         superadmin=current_user,
+                         total_admins=total_admins,
+                         total_users=total_users,
+                         total_attendance=total_attendance,
+                         pending_requests=pending_requests)
+
+@app.route("/superadmin/admins")
+@superadmin_required
+def superadmin_admins():
+    """Manage Admins"""
+    admins = list(admins_col.find({}, {"password_hash": 0}))
+    for admin in admins:
+        admin["_id"] = str(admin["_id"])
+        if "created_at" in admin:
+            try:
+                admin["created_at"] = admin["created_at"].isoformat()
+            except:
+                pass
+    return render_template("superadmin/admins.html", superadmin=current_user, admins=admins)
+
+@app.route("/api/superadmin/create_admin", methods=["POST"])
+@superadmin_required
+def superadmin_create_admin():
+    """Create new admin"""
+    try:
+        name = request.form.get("name", "").strip()
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        
+        if not name or not email or not password:
+            return jsonify({"status": "failed", "msg": "All fields required"}), 400
+        
+        if admins_col.find_one({"email": email}):
+            return jsonify({"status": "failed", "msg": "Admin already exists"}), 400
+        
+        admin_id = f"{datetime.datetime.utcnow().timestamp()}_{email}"
+        admin_doc = {
+            "_id": admin_id,
+            "name": name,
+            "email": email,
+            "password_hash": generate_password_hash(password),
+            "profile_image": "",
+            "created_at": datetime.datetime.utcnow(),
+            "created_by": current_user.email
+        }
+        admins_col.insert_one(admin_doc)
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "create_admin",
+            "admin_email": email,
+            "performed_by": current_user.email,
+            "timestamp": datetime.datetime.utcnow()
+        })
+        
+        return jsonify({"status": "success", "msg": f"Admin {name} created successfully"})
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/delete_admin/<admin_id>", methods=["DELETE"])
+@superadmin_required
+def superadmin_delete_admin(admin_id):
+    """Delete admin"""
+    try:
+        result = admins_col.delete_one({"_id": admin_id})
+        if result.deleted_count > 0:
+            system_logs_col.insert_one({
+                "action": "delete_admin",
+                "admin_id": admin_id,
+                "performed_by": current_user.email,
+                "timestamp": datetime.datetime.utcnow()
+            })
+            return jsonify({"status": "success", "msg": "Admin deleted"})
+        return jsonify({"status": "failed", "msg": "Admin not found"}), 404
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/superadmin/users")
+@superadmin_required
+def superadmin_users():
+    """View all users"""
+    users = list(persons_col.find({}))
+    for user in users:
+        user["_id"] = str(user["_id"])
+        if "enrollment_date" in user:
+            try:
+                user["enrollment_date"] = user["enrollment_date"].isoformat()
+            except:
+                pass
+    return render_template("superadmin/users.html", superadmin=current_user, users=users)
+
+@app.route("/superadmin/cameras")
+@superadmin_required
+def superadmin_cameras():
+    """Camera management"""
+    return render_template("superadmin/cameras.html", superadmin=current_user)
+
+@app.route("/superadmin/logs")
+@superadmin_required
+def superadmin_logs():
+    """System logs"""
+    logs = list(system_logs_col.find().sort("timestamp", -1).limit(100))
+    for log in logs:
+        log["_id"] = str(log["_id"])
+        if "timestamp" in log:
+            try:
+                log["timestamp"] = log["timestamp"].isoformat()
+            except:
+                pass
+    return render_template("superadmin/logs.html", superadmin=current_user, logs=logs)
+
+@app.route("/api/superadmin/system_stats")
+@superadmin_required
+def superadmin_system_stats():
+    """Get comprehensive system statistics"""
+    try:
+        stats = {
+            "total_superadmins": superadmins_col.count_documents({}),
+            "total_admins": admins_col.count_documents({}),
+            "total_users": persons_col.count_documents({}),
+            "active_users": persons_col.count_documents({"status": "active"}),
+            "blocked_users": persons_col.count_documents({"status": "blocked"}),
+            "total_attendance": attendance_col.count_documents({}),
+            "pending_requests": enrollment_requests_col.count_documents({"status": "pending"}),
+            "faiss_index_size": faiss_index.ntotal if faiss_index else 0,
+            "recent_logs": system_logs_col.count_documents({})
+        }
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # Health check endpoint for Railway
 @app.route("/health")
 def health_check():
@@ -932,6 +1116,32 @@ def health_check():
             "error": str(e),
             "timestamp": datetime.datetime.utcnow().isoformat()
         }), 503
+
+# Auto-create super admin on startup
+def create_default_superadmin():
+    """Create default super admin if none exists"""
+    try:
+        superadmin_email = os.environ.get("SUPERADMIN_EMAIL", "superadmin@admin.com")
+        superadmin_password = os.environ.get("SUPERADMIN_PASSWORD", "SuperAdmin@123")
+        
+        existing = superadmins_col.find_one({"email": superadmin_email})
+        if not existing:
+            superadmin_id = f"{datetime.datetime.utcnow().timestamp()}_{superadmin_email}"
+            superadmin_doc = {
+                "_id": superadmin_id,
+                "name": "Super Administrator",
+                "email": superadmin_email,
+                "password_hash": generate_password_hash(superadmin_password),
+                "profile_image": "",
+                "created_at": datetime.datetime.utcnow()
+            }
+            superadmins_col.insert_one(superadmin_doc)
+            print(f"✅ Super Admin created: {superadmin_email}")
+            print(f"   Password: {superadmin_password}")
+        else:
+            print(f"✅ Super Admin exists: {existing['email']}")
+    except Exception as e:
+        print(f"⚠️ Super Admin creation error: {e}")
 
 # Auto-create admin on startup
 def create_default_admin():
@@ -962,6 +1172,7 @@ def create_default_admin():
 def initialize_app():
     """Initialize application components with error handling"""
     print("[Startup] Initializing application...")
+    print("="*60)
     
     try:
         # Test MongoDB connection
@@ -979,12 +1190,25 @@ def initialize_app():
         print(f"⚠️ FAISS initialization error: {e}")
     
     try:
+        # Create default super admin
+        create_default_superadmin()
+    except Exception as e:
+        print(f"⚠️ Super Admin creation error: {e}")
+    
+    try:
         # Create default admin
         create_default_admin()
     except Exception as e:
         print(f"⚠️ Admin creation error: {e}")
     
+    print("="*60)
     print("[Startup] Application initialization complete")
+    print("")
+    print("🔐 DEFAULT CREDENTIALS:")
+    print(f"   Super Admin: superadmin@admin.com / SuperAdmin@123")
+    print(f"   Admin: admin@admin.com / password123")
+    print("   ⚠️  CHANGE THESE PASSWORDS IMMEDIATELY!")
+    print("="*60)
 
 # Run initialization
 initialize_app()

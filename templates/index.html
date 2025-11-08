@@ -1,0 +1,687 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Attendance System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            overflow-x: hidden;
+            background: #0a0a0f;
+            color: #fff;
+        }
+
+        .container {
+            min-height: 100vh;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Animated gradient background */
+        .gradient-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #010722 0%, #764ba2 25%, #f093fb 50%, #0357a0 75%, #00f2fe 100%);
+            background-size: 400% 400%;
+            animation: gradientShift 15s ease infinite;
+            filter: blur(100px);
+            opacity: 0.6;
+        }
+
+        @keyframes gradientShift {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        /* Floating orbs */
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(60px);
+            opacity: 0.5;
+            animation: float 20s ease-in-out infinite;
+        }
+
+        .orb1 {
+            width: 300px;
+            height: 300px;
+            background: radial-gradient(circle, #667eea, transparent);
+            top: 10%;
+            left: 10%;
+            animation-delay: 0s;
+        }
+
+        .orb2 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, #f093fb, transparent);
+            bottom: 10%;
+            right: 10%;
+            animation-delay: 7s;
+        }
+
+        .orb3 {
+            width: 250px;
+            height: 250px;
+            background: radial-gradient(circle, #4facfe, transparent);
+            top: 50%;
+            right: 20%;
+            animation-delay: 3s;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(50px, -50px) scale(1.1); }
+            66% { transform: translate(-50px, 50px) scale(0.9); }
+        }
+
+        /* 3D Robot Avatar Background */
+        #robotAvatar {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 400px;
+            height: 400px;
+            z-index: 1;
+            opacity: 0.15;
+            transition: transform 0.3s ease-out;
+            pointer-events: none;
+            filter: blur(1px);
+        }
+
+        .robot {
+            width: 100%;
+            height: 100%;
+            position: relative;
+            transform-style: preserve-3d;
+            animation: robotFloat 6s ease-in-out infinite;
+        }
+
+        @keyframes robotFloat {
+            0%, 100% { transform: translateY(0) rotateY(0deg); }
+            50% { transform: translateY(-20px) rotateY(10deg); }
+        }
+
+        /* Robot Head */
+        .robot-head {
+            position: absolute;
+            top: 20%;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.3));
+            border-radius: 20px;
+            border: 3px solid rgba(102, 126, 234, 0.5);
+            backdrop-filter: blur(10px);
+            transform-style: preserve-3d;
+            animation: headTilt 4s ease-in-out infinite;
+        }
+
+        @keyframes headTilt {
+            0%, 100% { transform: translateX(-50%) rotateZ(0deg); }
+            50% { transform: translateX(-50%) rotateZ(-5deg); }
+        }
+
+        /* Robot Eyes */
+        .robot-eye {
+            position: absolute;
+            top: 35%;
+            width: 20px;
+            height: 20px;
+            background: #4facfe;
+            border-radius: 50%;
+            box-shadow: 0 0 20px #4facfe, inset 0 0 10px rgba(255, 255, 255, 0.5);
+            animation: eyeBlink 3s ease-in-out infinite;
+        }
+
+        .robot-eye.left { left: 25%; }
+        .robot-eye.right { right: 25%; }
+
+        @keyframes eyeBlink {
+            0%, 90%, 100% { transform: scaleY(1); }
+            95% { transform: scaleY(0.1); }
+        }
+
+        /* Robot Antenna */
+        .robot-antenna {
+            position: absolute;
+            top: -30px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 4px;
+            height: 30px;
+            background: linear-gradient(to bottom, rgba(102, 126, 234, 0.5), transparent);
+        }
+
+        .robot-antenna::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 12px;
+            height: 12px;
+            background: #f093fb;
+            border-radius: 50%;
+            box-shadow: 0 0 15px #f093fb;
+            animation: antennaBlink 2s ease-in-out infinite;
+        }
+
+        @keyframes antennaBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        /* Robot Body */
+        .robot-body {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 140px;
+            height: 160px;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.2), rgba(118, 75, 162, 0.2));
+            border-radius: 30px;
+            border: 3px solid rgba(102, 126, 234, 0.4);
+            backdrop-filter: blur(10px);
+        }
+
+        /* Robot Arms */
+        .robot-arm {
+            position: absolute;
+            top: 30%;
+            width: 20px;
+            height: 80px;
+            background: linear-gradient(to bottom, rgba(102, 126, 234, 0.3), rgba(118, 75, 162, 0.3));
+            border-radius: 10px;
+            border: 2px solid rgba(102, 126, 234, 0.4);
+        }
+
+        .robot-arm.left {
+            left: -25px;
+            animation: armWaveLeft 3s ease-in-out infinite;
+        }
+
+        .robot-arm.right {
+            right: -25px;
+            animation: armWaveRight 3s ease-in-out infinite 0.5s;
+        }
+
+        @keyframes armWaveLeft {
+            0%, 100% { transform: rotate(-10deg); }
+            50% { transform: rotate(-30deg); }
+        }
+
+        @keyframes armWaveRight {
+            0%, 100% { transform: rotate(10deg); }
+            50% { transform: rotate(30deg); }
+        }
+
+        /* Robot Lights */
+        .robot-light {
+            position: absolute;
+            width: 8px;
+            height: 8px;
+            background: #4facfe;
+            border-radius: 50%;
+            box-shadow: 0 0 10px #4facfe;
+            animation: lightPulse 1.5s ease-in-out infinite;
+        }
+
+        .robot-light:nth-child(1) { top: 20%; left: 20%; }
+        .robot-light:nth-child(2) { top: 20%; right: 20%; animation-delay: 0.3s; }
+        .robot-light:nth-child(3) { top: 40%; left: 20%; animation-delay: 0.6s; }
+        .robot-light:nth-child(4) { top: 40%; right: 20%; animation-delay: 0.9s; }
+
+        @keyframes lightPulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.8); }
+        }
+
+        /* Main content */
+        .content {
+            position: relative;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        /* Optimized 3D Interactive Cards */
+        .cards-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 2.5rem;
+            max-width: 1000px;
+            width: 100%;
+            margin: 3rem 0;
+            perspective: 1500px;
+        }
+
+        .card-3d {
+            position: relative;
+            height: 280px;
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(30px);
+            border-radius: 24px;
+            border: 2px solid rgba(255, 255, 255, 0.08);
+            cursor: pointer;
+            transform-style: preserve-3d;
+            transition: all 0.6s cubic-bezier(0.23, 1, 0.320, 1);
+            overflow: hidden;
+        }
+
+        .card-3d::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(240, 147, 251, 0.1));
+            opacity: 0;
+            transition: opacity 0.6s;
+            border-radius: 24px;
+        }
+
+        .card-3d:hover {
+            transform: translateY(-15px) scale(1.02);
+            box-shadow: 0 30px 80px rgba(102, 126, 234, 0.5);
+            border-color: rgba(102, 126, 234, 0.6);
+        }
+
+        .card-3d:hover::after {
+            opacity: 1;
+        }
+
+        .card-content {
+            position: relative;
+            z-index: 2;
+            padding: 2.5rem 2rem;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 1.5rem;
+        }
+
+        .card-icon {
+            width: 100px;
+            height: 100px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.6s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            filter: drop-shadow(0 10px 20px rgba(102, 126, 234, 0.3));
+        }
+
+        .card-icon img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 16px;
+            transition: transform 0.6s;
+        }
+
+        .card-3d:hover .card-icon {
+            transform: translateZ(60px) scale(1.15) rotateZ(5deg);
+        }
+
+        .card-3d:hover .card-icon img {
+            transform: scale(1.1);
+        }
+
+        .card-title {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            transform: translateZ(20px);
+            transition: all 0.6s;
+            text-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+
+        .card-3d:hover .card-title {
+            transform: translateZ(40px);
+            color: #4facfe;
+        }
+
+        /* Typography */
+        h1 {
+            font-size: clamp(2.5rem, 8vw, 5.5rem);
+            font-weight: 900;
+            margin-bottom: 1rem;
+            background: linear-gradient(135deg, #fff 0%, #667eea 50%, #f093fb 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            animation: fadeInUp 1s ease-out;
+            letter-spacing: -2px;
+        }
+
+        .subtitle {
+            font-size: clamp(1.1rem, 3vw, 1.6rem);
+            margin-bottom: 3rem;
+            opacity: 0.95;
+            animation: fadeInUp 1s ease-out 0.2s both;
+            font-weight: 500;
+            letter-spacing: 0.5px;
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Enhanced Buttons */
+        .btn-group {
+            display: flex;
+            gap: 1.5rem;
+            flex-wrap: wrap;
+            justify-content: center;
+            animation: fadeInUp 1s ease-out 0.4s both;
+            margin-top: 2rem;
+        }
+
+        .btn {
+            padding: 1.2rem 3rem;
+            font-size: 1.15rem;
+            font-weight: 700;
+            border-radius: 50px;
+            text-decoration: none;
+            transition: all 0.4s cubic-bezier(0.23, 1, 0.320, 1);
+            position: relative;
+            overflow: hidden;
+            border: 2px solid transparent;
+            letter-spacing: 0.5px;
+            z-index: 1;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 0;
+            height: 0;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%);
+            transition: width 0.6s, height 0.6s;
+        }
+
+        .btn:hover::before {
+            width: 300px;
+            height: 300px;
+        }
+
+        .btn span {
+            position: relative;
+            z-index: 2;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: #fff;
+            box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 20px 60px rgba(102, 126, 234, 0.6);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(20px);
+            color: #fff;
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-5px) scale(1.05);
+            border-color: rgba(255, 255, 255, 0.5);
+            box-shadow: 0 20px 60px rgba(255, 255, 255, 0.2);
+        }
+
+        /* Particles */
+        .particles {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            overflow: hidden;
+            z-index: 2;
+        }
+
+        .particle {
+            position: absolute;
+            width: 4px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 50%;
+            animation: particle-float 15s linear infinite;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+        }
+
+        @keyframes particle-float {
+            0% {
+                transform: translateY(100vh) translateX(0) scale(0);
+                opacity: 0;
+            }
+            10% {
+                opacity: 1;
+                transform: translateY(90vh) translateX(20px) scale(1);
+            }
+            90% {
+                opacity: 1;
+            }
+            100% {
+                transform: translateY(-10vh) translateX(100px) scale(0);
+                opacity: 0;
+            }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            #robotAvatar {
+                width: 300px;
+                height: 300px;
+                opacity: 0.1;
+            }
+
+            .cards-container {
+                grid-template-columns: 1fr;
+                gap: 2rem;
+            }
+
+            .card-3d {
+                height: 250px;
+            }
+
+            .btn-group {
+                flex-direction: column;
+                width: 100%;
+                max-width: 300px;
+            }
+
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="gradient-bg"></div>
+        <div class="orb orb1"></div>
+        <div class="orb orb2"></div>
+        <div class="orb orb3"></div>
+        
+        <div class="particles" id="particles"></div>
+
+        <!-- 3D Robot Avatar -->
+        <div id="robotAvatar">
+            <div class="robot">
+                <div class="robot-head">
+                    <div class="robot-antenna"></div>
+                    <div class="robot-eye left"></div>
+                    <div class="robot-eye right"></div>
+                </div>
+                <div class="robot-body">
+                    <div class="robot-light"></div>
+                    <div class="robot-light"></div>
+                    <div class="robot-light"></div>
+                    <div class="robot-light"></div>
+                    <div class="robot-arm left"></div>
+                    <div class="robot-arm right"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="content">
+            <h1>Smart Attendance System</h1>
+            <p class="subtitle">AI-Powered Face Recognition Attendance</p>
+
+            <div class="cards-container">
+                <div class="card-3d">
+                    <div class="card-content">
+                        <div class="card-icon">
+                            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='grad1' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23667eea;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%23764ba2;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='100' cy='100' r='80' fill='url(%23grad1)' opacity='0.3'/%3E%3Ccircle cx='100' cy='100' r='60' fill='url(%23grad1)' opacity='0.5'/%3E%3Cpath d='M100 60 L120 80 L100 100 L80 80 Z' fill='%234facfe'/%3E%3Ccircle cx='85' cy='90' r='8' fill='%234facfe'/%3E%3Ccircle cx='115' cy='90' r='8' fill='%234facfe'/%3E%3Cpath d='M80 110 Q100 120 120 110' stroke='%234facfe' stroke-width='4' fill='none'/%3E%3C/svg%3E" alt="AI Recognition">
+                        </div>
+                        <div class="card-title">AI Recognition</div>
+                    </div>
+                </div>
+
+                <div class="card-3d">
+                    <div class="card-content">
+                        <div class="card-icon">
+                            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='grad2' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%23f093fb;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%234facfe;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Cpath d='M100 20 L180 100 L100 180 L20 100 Z' fill='url(%23grad2)' opacity='0.3'/%3E%3Cpath d='M100 50 L150 100 L100 150 L50 100 Z' fill='url(%23grad2)' opacity='0.6'/%3E%3Cpath d='M100 40 L100 160 M40 100 L160 100' stroke='%23f093fb' stroke-width='3' stroke-dasharray='5,5'/%3E%3Ccircle cx='100' cy='100' r='15' fill='%23f093fb'/%3E%3C/svg%3E" alt="Real-time Tracking">
+                        </div>
+                        <div class="card-title">Real-time Tracking</div>
+                    </div>
+                </div>
+
+                <div class="card-3d">
+                    <div class="card-content">
+                        <div class="card-icon">
+                            <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 200'%3E%3Cdefs%3E%3ClinearGradient id='grad3' x1='0%25' y1='0%25' x2='100%25' y2='100%25'%3E%3Cstop offset='0%25' style='stop-color:%234facfe;stop-opacity:1' /%3E%3Cstop offset='100%25' style='stop-color:%2300f2fe;stop-opacity:1' /%3E%3C/linearGradient%3E%3C/defs%3E%3Ccircle cx='100' cy='100' r='70' fill='none' stroke='url(%23grad3)' stroke-width='8' opacity='0.3'/%3E%3Crect x='70' y='80' width='60' height='80' rx='5' fill='url(%23grad3)' opacity='0.5'/%3E%3Ccircle cx='100' cy='60' r='10' fill='%234facfe'/%3E%3Cpath d='M85 110 L95 120 L115 100' stroke='%2300f2fe' stroke-width='4' fill='none'/%3E%3C/svg%3E" alt="Secure & Private">
+                        </div>
+                        <div class="card-title">Secure & Private</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <a href="/login" class="btn btn-primary"><span>Get Started</span></a>
+                <a href="/registration_request" class="btn btn-secondary"><span>Sign Up</span></a>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Create floating particles
+        const particlesContainer = document.getElementById('particles');
+        const particleCount = 20;
+
+        for (let i = 0; i < particleCount; i++) {
+            const particle = document.createElement('div');
+            particle.className = 'particle';
+            particle.style.left = Math.random() * 100 + '%';
+            particle.style.animationDelay = Math.random() * 15 + 's';
+            particle.style.animationDuration = (Math.random() * 10 + 10) + 's';
+            particlesContainer.appendChild(particle);
+        }
+
+        // Robot Avatar Mouse Tracking
+        const robotAvatar = document.getElementById('robotAvatar');
+        let mouseX = 0;
+        let mouseY = 0;
+        let robotX = 0;
+        let robotY = 0;
+
+        document.addEventListener('mousemove', (e) => {
+            mouseX = (e.clientX - window.innerWidth / 2) / 30;
+            mouseY = (e.clientY - window.innerHeight / 2) / 30;
+        });
+
+        function animateRobot() {
+            robotX += (mouseX - robotX) * 0.05;
+            robotY += (mouseY - robotY) * 0.05;
+            
+            robotAvatar.style.transform = `translate(calc(-50% + ${robotX}px), calc(-50% + ${robotY}px))`;
+            
+            requestAnimationFrame(animateRobot);
+        }
+
+        animateRobot();
+
+        // Enhanced 3D card mouse tracking
+        const cards = document.querySelectorAll('.card-3d');
+        
+        cards.forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = e.clientX - rect.left;
+                const y = e.clientY - rect.top;
+                
+                const centerX = rect.width / 2;
+                const centerY = rect.height / 2;
+                
+                const rotateX = (y - centerY) / 8;
+                const rotateY = (centerX - x) / 8;
+                
+                card.style.transform = `translateY(-15px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) scale(1.02)`;
+            });
+            
+            card.addEventListener('mouseleave', () => {
+                card.style.transform = 'translateY(0) rotateX(0) rotateY(0) scale(1)';
+            });
+        });
+
+        // Smooth scroll reveal animation
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.style.opacity = '1';
+                    entry.target.style.transform = 'translateY(0)';
+                }
+            });
+        }, {
+            threshold: 0.1
+        });
+
+        document.querySelectorAll('.card-3d').forEach((card, index) => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(50px)';
+            card.style.transition = `opacity 0.8s ease ${index * 0.15}s, transform 0.8s ease ${index * 0.15}s`;
+            observer.observe(card);
+        });
+    </script>
+</body>
+</html>

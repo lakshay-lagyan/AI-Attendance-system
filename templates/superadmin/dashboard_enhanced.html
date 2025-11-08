@@ -1,0 +1,633 @@
+{% extends "base.html" %}
+
+{% block title %}Super Admin Dashboard{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .sidebar {
+        transition: transform 0.3s ease;
+    }
+    @media (max-width: 768px) {
+        .sidebar.hidden-mobile {
+            transform: translateX(-100%);
+        }
+    }
+    .stat-card {
+        transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .stat-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
+    }
+    .live-indicator {
+        animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+        0%, 100% { opacity: 1; }
+        50% { opacity: 0.5; }
+    }
+    #cameraFeed {
+        border-radius: 8px;
+        background: #1a1a1a;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex h-screen bg-gray-50">
+    <!-- Sidebar -->
+    <div id="sidebar" class="sidebar fixed md:static w-64 bg-gradient-to-b from-purple-600 to-purple-900 text-white h-full z-50 overflow-y-auto">
+        <div class="p-6 border-b border-purple-500">
+            <h1 class="text-2xl font-bold">Super Admin</h1>
+        </div>
+        
+        <nav class="p-4">
+            <a href="/superadmin/dashboard" class="flex items-center p-3 mb-2 bg-purple-700 rounded-lg">
+                <i class="fas fa-dashboard mr-3"></i> Dashboard
+            </a>
+            <a href="/superadmin/cameras" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-video mr-3"></i> Camera Manager
+            </a>
+            <a href="/superadmin/admins" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-user-shield mr-3"></i> Manage Admins
+            </a>
+            <a href="/superadmin/users" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-users mr-3"></i> All Users
+            </a>
+            <a href="/superadmin/logs" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-file-alt mr-3"></i> System Logs
+            </a>
+            <button onclick="logout()" class="w-full flex items-center p-3 mt-4 hover:bg-red-600 rounded-lg">
+                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            </button>
+        </nav>
+    </div>
+    
+    <!-- Main Content -->
+    <div class="flex-1 overflow-auto">
+        <!-- Top Bar -->
+        <div class="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-40">
+            <div class="flex items-center gap-3">
+                <button id="menuToggle" class="text-gray-600 hover:text-gray-800 focus:outline-none">
+                    <i class="fas fa-bars text-2xl"></i>
+                </button>
+                <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
+            </div>
+            <div id="userInfo" class="text-right"></div>
+        </div>
+        
+        <!-- Stats Grid -->
+        <div class="p-4 md:p-6">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Total Admins</p>
+                            <p id="totalAdmins" class="text-3xl font-bold text-purple-600">0</p>
+                        </div>
+                        <div class="bg-purple-100 p-3 rounded-full">
+                            <i class="fas fa-user-shield text-3xl text-purple-600"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Total Users</p>
+                            <p id="totalUsers" class="text-3xl font-bold text-blue-600">0</p>
+                        </div>
+                        <div class="bg-blue-100 p-3 rounded-full">
+                            <i class="fas fa-users text-3xl text-blue-600"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Enrolled</p>
+                            <p id="totalPersons" class="text-3xl font-bold text-green-600">0</p>
+                        </div>
+                        <div class="bg-green-100 p-3 rounded-full">
+                            <i class="fas fa-id-card text-3xl text-green-600"></i>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm font-medium">Today's Attendance</p>
+                            <p id="todayAttendance" class="text-3xl font-bold text-orange-600">0</p>
+                        </div>
+                        <div class="bg-orange-100 p-3 rounded-full">
+                            <i class="fas fa-calendar-check text-3xl text-orange-600"></i>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Real-time Monitoring Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Camera Feed Monitor -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold flex items-center">
+                            <i class="fas fa-video mr-2 text-purple-600"></i>
+                            Camera Feed Monitor
+                        </h3>
+                        <div class="flex items-center gap-2">
+                            <span class="live-indicator w-3 h-3 bg-red-600 rounded-full"></span>
+                            <span class="text-sm font-medium text-red-600">LIVE</span>
+                        </div>
+                    </div>
+                    <div class="aspect-video bg-gray-900 rounded-lg flex items-center justify-center relative overflow-hidden">
+                        <video id="cameraFeed" class="w-full h-full object-cover" autoplay muted></video>
+                        <div id="cameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-gray-400">
+                            <i class="fas fa-video-slash text-6xl mb-4"></i>
+                            <p class="text-lg">Camera Not Connected</p>
+                            <button onclick="startCameraFeed()" class="mt-4 bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                                <i class="fas fa-play mr-2"></i> Start Feed
+                            </button>
+                        </div>
+                    </div>
+                    <div class="mt-4 grid grid-cols-2 gap-4">
+                        <button onclick="stopCameraFeed()" class="bg-red-600 text-white px-4 py-2 rounded-lg hover:bg-red-700">
+                            <i class="fas fa-stop mr-2"></i> Stop Feed
+                        </button>
+                        <button onclick="refreshCameraFeed()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700">
+                            <i class="fas fa-sync-alt mr-2"></i> Refresh
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Live Attendance Tracker -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-xl font-bold flex items-center">
+                            <i class="fas fa-clock mr-2 text-blue-600"></i>
+                            Live Attendance
+                        </h3>
+                        <button onclick="loadLiveAttendance()" class="text-blue-600 hover:text-blue-800">
+                            <i class="fas fa-sync-alt"></i>
+                        </button>
+                    </div>
+                    <div id="liveAttendance" class="space-y-3 max-h-96 overflow-y-auto">
+                        <div class="text-center text-gray-500 py-8">Loading...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Analytics Charts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Daily Attendance Chart -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 flex items-center">
+                        <i class="fas fa-chart-line mr-2 text-blue-600"></i>
+                        Daily Attendance (Last 7 Days)
+                    </h3>
+                    <canvas id="dailyChart" height="250"></canvas>
+                </div>
+                
+                <!-- Weekly Attendance Chart -->
+                <div class="bg-white rounded-lg shadow-lg p-6">
+                    <h3 class="text-xl font-bold mb-4 flex items-center">
+                        <i class="fas fa-chart-bar mr-2 text-green-600"></i>
+                        Weekly Overview
+                    </h3>
+                    <canvas id="weeklyChart" height="250"></canvas>
+                </div>
+            </div>
+            
+            <!-- Monthly Analytics -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h3 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-chart-area mr-2 text-purple-600"></i>
+                    Monthly Attendance Trends
+                </h3>
+                <canvas id="monthlyChart" height="100"></canvas>
+            </div>
+            
+            <!-- User Attendance Patterns -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <h3 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-user-check mr-2 text-indigo-600"></i>
+                    User Attendance Patterns
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="p-3 text-left text-sm font-semibold">User</th>
+                                <th class="p-3 text-left text-sm font-semibold">Department</th>
+                                <th class="p-3 text-left text-sm font-semibold">Total Days</th>
+                                <th class="p-3 text-left text-sm font-semibold">On-Time %</th>
+                                <th class="p-3 text-left text-sm font-semibold">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="userPatternsTable" class="divide-y">
+                            <tr><td colspan="5" class="p-4 text-center text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Recent System Logs -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-xl font-bold mb-4 flex items-center">
+                    <i class="fas fa-file-alt mr-2 text-gray-600"></i>
+                    Recent System Logs
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="p-3 text-left text-sm font-semibold">Time</th>
+                                <th class="p-3 text-left text-sm font-semibold">User</th>
+                                <th class="p-3 text-left text-sm font-semibold">Action</th>
+                                <th class="p-3 text-left text-sm font-semibold hidden md:table-cell">Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTable" class="divide-y">
+                            <tr><td colspan="4" class="p-4 text-center text-gray-500">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let sidebar, menuToggle;
+let dailyChart, weeklyChart, monthlyChart;
+let cameraStream = null;
+let attendanceRefreshInterval;
+
+document.addEventListener('DOMContentLoaded', () => {
+    sidebar = document.getElementById('sidebar');
+    menuToggle = document.getElementById('menuToggle');
+    
+    menuToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('hidden-mobile');
+    });
+    
+    // Close sidebar when clicking outside on mobile
+    document.addEventListener('click', (e) => {
+        if (window.innerWidth < 768) {
+            if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+                sidebar.classList.add('hidden-mobile');
+            }
+        }
+    });
+    
+    loadUserInfo();
+    loadStats();
+    loadLogs();
+    loadLiveAttendance();
+    loadCharts();
+    loadUserPatterns();
+    
+    // Auto-refresh live attendance every 10 seconds
+    attendanceRefreshInterval = setInterval(loadLiveAttendance, 10000);
+});
+
+async function loadUserInfo() {
+    try {
+        const response = await apiRequest('/auth/me');
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('userInfo').innerHTML = `
+                <p class="font-semibold text-gray-800">${data.user.name}</p>
+                <p class="text-sm text-gray-600">${data.user.email}</p>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading user info:', error);
+    }
+}
+
+async function loadStats() {
+    try {
+        const response = await apiRequest('/superadmin/stats');
+        const data = await response.json();
+        
+        if (response.ok) {
+            document.getElementById('totalAdmins').textContent = data.total_admins;
+            document.getElementById('totalUsers').textContent = data.total_users;
+            document.getElementById('totalPersons').textContent = data.total_persons;
+            document.getElementById('todayAttendance').textContent = data.today_attendance;
+        }
+    } catch (error) {
+        console.error('Error loading stats:', error);
+    }
+}
+
+async function loadLiveAttendance() {
+    try {
+        const response = await apiRequest('/superadmin/attendance/live?limit=10');
+        const data = await response.json();
+        
+        if (response.ok && data.attendance && data.attendance.length > 0) {
+            const html = data.attendance.map(att => {
+                const date = new Date(att.timestamp);
+                const timeAgo = getTimeAgo(date);
+                
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
+                        <div class="flex items-center gap-3">
+                            <div class="bg-blue-100 p-2 rounded-full">
+                                <i class="fas fa-user text-blue-600"></i>
+                            </div>
+                            <div>
+                                <p class="font-semibold text-gray-800">${att.name}</p>
+                                <p class="text-xs text-gray-500">${timeAgo}</p>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-sm font-medium text-gray-700">${date.toLocaleTimeString()}</p>
+                            <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">
+                                ${(att.confidence * 100).toFixed(0)}%
+                            </span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            document.getElementById('liveAttendance').innerHTML = html;
+        } else {
+            document.getElementById('liveAttendance').innerHTML = `
+                <div class="text-center text-gray-500 py-8">
+                    <i class="fas fa-inbox text-4xl mb-2"></i>
+                    <p>No attendance records today</p>
+                </div>
+            `;
+        }
+    } catch (error) {
+        console.error('Error loading live attendance:', error);
+    }
+}
+
+function getTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    if (seconds < 60) return 'Just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    return date.toLocaleDateString();
+}
+
+async function loadCharts() {
+    try {
+        const response = await apiRequest('/superadmin/attendance/stats?days=30');
+        const data = await response.json();
+        
+        if (response.ok) {
+            createDailyChart(data.daily_attendance || []);
+            createWeeklyChart(data.daily_attendance || []);
+            createMonthlyChart(data.daily_attendance || []);
+        }
+    } catch (error) {
+        console.error('Error loading charts:', error);
+    }
+}
+
+function createDailyChart(dailyData) {
+    const ctx = document.getElementById('dailyChart').getContext('2d');
+    const last7Days = dailyData.slice(-7);
+    
+    dailyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: last7Days.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets: [{
+                label: 'Attendance',
+                data: last7Days.map(d => d.count),
+                borderColor: 'rgb(59, 130, 246)',
+                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createWeeklyChart(dailyData) {
+    const ctx = document.getElementById('weeklyChart').getContext('2d');
+    const last7Days = dailyData.slice(-7);
+    
+    weeklyChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: last7Days.map(d => new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' })),
+            datasets: [{
+                label: 'Attendance',
+                data: last7Days.map(d => d.count),
+                backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                borderColor: 'rgb(34, 197, 94)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createMonthlyChart(dailyData) {
+    const ctx = document.getElementById('monthlyChart').getContext('2d');
+    
+    monthlyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dailyData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+            datasets: [{
+                label: 'Daily Attendance',
+                data: dailyData.map(d => d.count),
+                borderColor: 'rgb(168, 85, 247)',
+                backgroundColor: 'rgba(168, 85, 247, 0.1)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: true }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        precision: 0
+                    }
+                }
+            }
+        }
+    });
+}
+
+async function loadUserPatterns() {
+    try {
+        const response = await apiRequest('/superadmin/users');
+        const data = await response.json();
+        
+        if (response.ok && data.users) {
+            const users = data.users.slice(0, 10); // Show top 10
+            
+            if (users.length > 0) {
+                const html = users.map(user => `
+                    <tr class="hover:bg-gray-50">
+                        <td class="p-3">
+                            <div class="flex items-center gap-2">
+                                <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                                    <i class="fas fa-user text-indigo-600 text-sm"></i>
+                                </div>
+                                <span class="font-medium">${user.name}</span>
+                            </div>
+                        </td>
+                        <td class="p-3 text-gray-600">${user.department || 'N/A'}</td>
+                        <td class="p-3 font-medium">-</td>
+                        <td class="p-3">
+                            <div class="flex items-center gap-2">
+                                <div class="w-full bg-gray-200 rounded-full h-2">
+                                    <div class="bg-green-500 h-2 rounded-full" style="width: 85%"></div>
+                                </div>
+                                <span class="text-sm font-medium">85%</span>
+                            </div>
+                        </td>
+                        <td class="p-3">
+                            <span class="px-2 py-1 rounded text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
+                                ${user.status || 'Active'}
+                            </span>
+                        </td>
+                    </tr>
+                `).join('');
+                
+                document.getElementById('userPatternsTable').innerHTML = html;
+            }
+        }
+    } catch (error) {
+        console.error('Error:', error);
+    }
+}
+
+async function loadLogs() {
+    try {
+        const response = await apiRequest('/superadmin/logs?per_page=10');
+        const data = await response.json();
+        
+        if (response.ok && data.logs.length > 0) {
+            const logsHTML = data.logs.map(log => `
+                <tr class="hover:bg-gray-50">
+                    <td class="p-3 text-sm">${new Date(log.timestamp).toLocaleString()}</td>
+                    <td class="p-3 text-sm">${log.user_email}</td>
+                    <td class="p-3 text-sm">
+                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
+                            ${log.action}
+                        </span>
+                    </td>
+                    <td class="p-3 text-sm text-gray-600 hidden md:table-cell">${log.details || ''}</td>
+                </tr>
+            `).join('');
+            
+            document.getElementById('logsTable').innerHTML = logsHTML;
+        } else {
+            document.getElementById('logsTable').innerHTML = 
+                '<tr><td colspan="4" class="p-4 text-center text-gray-500">No logs found</td></tr>';
+        }
+    } catch (error) {
+        console.error('Error loading logs:', error);
+    }
+}
+
+async function startCameraFeed() {
+    try {
+        cameraStream = await navigator.mediaDevices.getUserMedia({ 
+            video: { 
+                facingMode: 'user',
+                width: { ideal: 1280 },
+                height: { ideal: 720 }
+            } 
+        });
+        
+        const video = document.getElementById('cameraFeed');
+        const placeholder = document.getElementById('cameraPlaceholder');
+        
+        video.srcObject = cameraStream;
+        placeholder.style.display = 'none';
+        video.style.display = 'block';
+        
+        showToast('Camera feed started', 'success');
+    } catch (error) {
+        console.error('Camera error:', error);
+        showToast('Failed to start camera feed', 'error');
+    }
+}
+
+function stopCameraFeed() {
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        
+        const video = document.getElementById('cameraFeed');
+        const placeholder = document.getElementById('cameraPlaceholder');
+        
+        video.srcObject = null;
+        video.style.display = 'none';
+        placeholder.style.display = 'flex';
+        
+        cameraStream = null;
+        showToast('Camera feed stopped', 'info');
+    }
+}
+
+function refreshCameraFeed() {
+    stopCameraFeed();
+    setTimeout(startCameraFeed, 500);
+}
+
+// Cleanup on page unload
+window.addEventListener('beforeunload', () => {
+    stopCameraFeed();
+    if (attendanceRefreshInterval) {
+        clearInterval(attendanceRefreshInterval);
+    }
+});
+</script>
+{% endblock %}

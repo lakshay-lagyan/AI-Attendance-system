@@ -1,0 +1,246 @@
+{% extends "base.html" %}
+
+{% block title %}Manage Admins - Super Admin{% endblock %}
+
+{% block extra_styles %}
+<style>
+    .sidebar { transition: transform 0.3s ease; }
+    @media (max-width: 768px) {
+        .sidebar.hidden-mobile { transform: translateX(-100%); }
+    }
+    .modal { display: none; }
+    .modal.active { display: flex; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex h-screen bg-gray-100">
+    <div id="sidebar" class="sidebar fixed md:static w-64 bg-gradient-to-b from-purple-600 to-purple-900 text-white h-full z-50">
+        <div class="p-6 border-b border-purple-500">
+            <h1 class="text-2xl font-bold">Super Admin</h1>
+        </div>
+        
+        <nav class="p-4">
+            <a href="/superadmin/dashboard" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-dashboard mr-3"></i> Dashboard
+            </a>
+            <a href="/superadmin/admins" class="flex items-center p-3 mb-2 bg-purple-700 rounded-lg">
+                <i class="fas fa-user-shield mr-3"></i> Manage Admins
+            </a>
+            <a href="/superadmin/users" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-users mr-3"></i> All Users
+            </a>
+            <a href="/superadmin/logs" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
+                <i class="fas fa-file-alt mr-3"></i> System Logs
+            </a>
+            <button onclick="logout()" class="w-full flex items-center p-3 mt-4 hover:bg-red-600 rounded-lg">
+                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            </button>
+        </nav>
+    </div>
+    
+    <div class="flex-1 overflow-auto">
+        <div class="bg-white shadow-sm p-4 flex justify-between items-center">
+            <button id="menuToggle" class="md:hidden text-gray-600">
+                <i class="fas fa-bars text-2xl"></i>
+            </button>
+            <h2 class="text-2xl font-bold text-gray-800">Manage Roles</h2>
+            <div class="flex gap-2">
+                <button onclick="filterRoles('all')" id="btn-all" class="filter-btn px-4 py-2 rounded-lg bg-purple-600 text-white">
+                    All Users
+                </button>
+                <button onclick="filterRoles('admin')" id="btn-admin" class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                    Admins Only
+                </button>
+                <button onclick="filterRoles('user')" id="btn-user" class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
+                    Users Only
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-4 md:p-6">
+            <div class="bg-white rounded-lg shadow">
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="p-4 text-left">Name</th>
+                                <th class="p-4 text-left">Email</th>
+                                <th class="p-4 text-left hidden md:table-cell">Department</th>
+                                <th class="p-4 text-left">Role</th>
+                                <th class="p-4 text-left">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTable" class="divide-y">
+                            <tr><td colspan="5" class="p-4 text-center">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+let allUsers = [];
+let admins = [];
+let currentFilter = 'all';
+
+document.addEventListener('DOMContentLoaded', () => {
+    const sidebar = document.getElementById('sidebar');
+    const menuToggle = document.getElementById('menuToggle');
+    
+    menuToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('hidden-mobile');
+    });
+    
+    loadAllData();
+});
+
+async function loadAllData() {
+    try {
+        // Load both users and admins
+        const [usersResp, adminsResp] = await Promise.all([
+            apiRequest('/superadmin/users'),
+            apiRequest('/superadmin/admins')
+        ]);
+        
+        const usersData = await usersResp.json();
+        const adminsData = await adminsResp.json();
+        
+        if (usersResp.ok) allUsers = usersData.users;
+        if (adminsResp.ok) admins = adminsData.admins;
+        
+        displayUsers();
+    } catch (error) {
+        console.error('Error loading data:', error);
+        showToast('Failed to load users', 'error');
+    }
+}
+
+function displayUsers() {
+    const tbody = document.getElementById('usersTable');
+    
+    // Create combined list with role information
+    const combinedList = allUsers.map(user => {
+        const isAdmin = admins.find(a => a.email === user.email && a.is_active);
+        return {
+            ...user,
+            role: isAdmin ? 'admin' : 'user',
+            adminId: isAdmin ? isAdmin.id : null
+        };
+    });
+    
+    // Filter based on current filter
+    let filteredList = combinedList;
+    if (currentFilter === 'admin') {
+        filteredList = combinedList.filter(u => u.role === 'admin');
+    } else if (currentFilter === 'user') {
+        filteredList = combinedList.filter(u => u.role === 'user');
+    }
+    
+    if (filteredList.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No users found</td></tr>';
+        return;
+    }
+    
+    tbody.innerHTML = filteredList.map(user => `
+        <tr>
+            <td class="p-4">${user.name}</td>
+            <td class="p-4 text-sm">${user.email}</td>
+            <td class="p-4 hidden md:table-cell">${user.department || 'N/A'}</td>
+            <td class="p-4">
+                <span class="px-3 py-1 rounded-full text-xs font-semibold ${
+                    user.role === 'admin' 
+                        ? 'bg-purple-100 text-purple-800' 
+                        : 'bg-blue-100 text-blue-800'
+                }">
+                    ${user.role === 'admin' ? 'Admin' : 'User'}
+                </span>
+            </td>
+            <td class="p-4">
+                ${user.role === 'admin' 
+                    ? `<button onclick="demoteToUser(${user.adminId}, ${user.id})" class="px-3 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600">
+                        <i class="fas fa-arrow-down mr-1"></i> Demote to User
+                       </button>`
+                    : `<button onclick="promoteToAdmin(${user.id})" class="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600">
+                        <i class="fas fa-arrow-up mr-1"></i> Promote to Admin
+                       </button>`
+                }
+            </td>
+        </tr>
+    `).join('');
+}
+
+function filterRoles(filter) {
+    currentFilter = filter;
+    
+    // Update button styles
+    document.querySelectorAll('.filter-btn').forEach(btn => {
+        btn.classList.remove('bg-purple-600', 'text-white');
+        btn.classList.add('bg-gray-200', 'text-gray-700');
+    });
+    
+    const activeBtn = document.getElementById(`btn-${filter}`);
+    activeBtn.classList.remove('bg-gray-200', 'text-gray-700');
+    activeBtn.classList.add('bg-purple-600', 'text-white');
+    
+    displayUsers();
+}
+
+async function promoteToAdmin(userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+    
+    if (!confirm(`Promote ${user.name} to Admin role?\n\nThey will have full administrative access.`)) {
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/superadmin/users/${userId}/promote-to-admin`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showToast(`${user.name} promoted to Admin!`, 'success');
+            loadAllData();
+        } else {
+            showToast(result.error || 'Failed to promote user', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Operation failed', 'error');
+    }
+}
+
+async function demoteToUser(adminId, userId) {
+    const user = allUsers.find(u => u.id === userId);
+    if (!user) return;
+    
+    if (!confirm(`Demote ${user.name} back to User role?\n\nThey will lose administrative access.`)) {
+        return;
+    }
+    
+    try {
+        const response = await apiRequest(`/superadmin/admins/${adminId}/demote-to-user`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+            showToast(`${user.name} demoted to User!`, 'success');
+            loadAllData();
+        } else {
+            showToast(result.error || 'Failed to demote admin', 'error');
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        showToast('Operation failed', 'error');
+    }
+}
+</script>
+{% endblock %}
