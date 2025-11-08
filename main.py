@@ -230,7 +230,29 @@ def login():
 @login_required
 def logout():
     logout_user()
+    flash("You have been logged out.", "success")
     return redirect(url_for("login"))
+
+# Auth API Endpoints
+@app.route("/auth/me")
+@login_required
+def auth_me():
+    """Return current user information"""
+    return jsonify({
+        "status": "success",
+        "user": {
+            "email": current_user.email,
+            "name": getattr(current_user, 'name', current_user.email),
+            "role": current_user.role
+        }
+    })
+
+@app.route("/api/auth/logout", methods=["POST"])
+@login_required
+def api_logout():
+    """API logout endpoint"""
+    logout_user()
+    return jsonify({"status": "success", "msg": "Logged out successfully"})
 
 @app.route("/create_admin", methods=["POST"])
 def create_admin():
@@ -265,10 +287,33 @@ def create_admin():
     return jsonify({"status": "success", "msg": "Admin created"}), 201
 
 # --- Admin Routes ---
-@app.route("/admin/dashboard")
-@admin_required
-def admin_dashboard():
-    return render_template("admin_dashboard.html", admin=current_user)
+@app.route("/superadmin/dashboard")
+@superadmin_required
+def superadmin_dashboard():
+    return render_template("superadmin/dashboard.html")
+
+@app.route("/superadmin/stats")
+@superadmin_required
+def superadmin_stats_api():
+    """API endpoint for super admin statistics"""
+    try:
+        stats = {
+            "total_users": persons_col.count_documents({"status": {"$ne": "blocked"}}),
+            "total_admins": admins_col.count_documents({}),
+            "pending_enrollments": enrollment_requests_col.count_documents({"status": "pending"}),
+            "total_attendance_today": attendance_col.count_documents({
+                "timestamp": {
+                    "$gte": datetime.datetime.combine(datetime.date.today(), datetime.time.min),
+                    "$lt": datetime.datetime.combine(datetime.date.today(), datetime.time.max)
+                }
+            }),
+            "total_cameras": cameras_col.count_documents({}),
+            "active_cameras": len(active_camera_streams),
+            "system_health": "healthy"
+        }
+        return jsonify(stats)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/admin/profile")
 @admin_required
