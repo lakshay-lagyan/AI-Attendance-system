@@ -19,7 +19,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET", "replace_this_with_a_real_secret")
 
 # MONGODB
-MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+MONGODB_URI = os.environ.get("MONGODB_URI")
 client = MongoClient(MONGODB_URI)
 
 transactional_db = client["transactional_db"]
@@ -1204,7 +1204,7 @@ def initialize_app():
     print("="*60)
     print("[Startup] Application initialization complete")
     print("")
-    print("🔐 DEFAULT CREDENTIALS:")
+    print("DEFAULT CREDENTIALS:")
     print(f"   Super Admin: superadmin@admin.com / SuperAdmin@123")
     print(f"   Admin: admin@admin.com / password123")
     print("   ⚠️  CHANGE THESE PASSWORDS IMMEDIATELY!")
