@@ -2,6 +2,10 @@
 
 {% block title %}System Logs - Super Admin{% endblock %}
 
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
+{% endblock %}
+
 {% block extra_styles %}
 <style>
     .sidebar { transition: transform 0.3s ease; }

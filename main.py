@@ -1208,6 +1208,12 @@ def superadmin_dashboard():
                          total_attendance=total_attendance,
                          pending_requests=pending_requests)
 
+@app.route("/superadmin/manage-people")
+@superadmin_required
+def superadmin_manage_people():
+    """Manage all people (users and admins)"""
+    return render_template("superadmin/manage_people.html", superadmin=current_user)
+
 @app.route("/superadmin/admins")
 @superadmin_required
 def superadmin_admins():
@@ -1276,6 +1282,23 @@ def superadmin_delete_admin(admin_id):
             })
             return jsonify({"status": "success", "msg": "Admin deleted"})
         return jsonify({"status": "failed", "msg": "Admin not found"}), 404
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/admins")
+@superadmin_required
+def api_get_all_admins():
+    """API endpoint to get all admins as JSON"""
+    try:
+        admins = list(admins_col.find({}, {"password_hash": 0}))
+        for admin in admins:
+            admin["_id"] = str(admin["_id"])
+            if "created_at" in admin:
+                try:
+                    admin["created_at"] = admin["created_at"].isoformat()
+                except:
+                    pass
+        return jsonify({"status": "success", "admins": admins})
     except Exception as e:
         return jsonify({"status": "failed", "msg": str(e)}), 500
 
@@ -1477,11 +1500,14 @@ def get_all_cameras():
     except Exception as e:
         return jsonify({"status": "failed", "msg": str(e)}), 500
 
-@app.route("/cameras/cameras", methods=["GET"])
+@app.route("/cameras/cameras", methods=["GET", "POST"])
 @superadmin_required
-def get_cameras_alias():
+def cameras_alias_endpoint():
     """Alias endpoint for backward compatibility"""
-    return get_all_cameras()
+    if request.method == "GET":
+        return get_all_cameras()
+    elif request.method == "POST":
+        return create_camera()
 
 @app.route("/api/superadmin/cameras", methods=["POST"])
 @limiter.limit("20 per hour")
@@ -1489,16 +1515,34 @@ def get_cameras_alias():
 def create_camera():
     """Create new camera configuration"""
     try:
-        name = request.form.get("name", "").strip()
-        source_type = request.form.get("source_type", "opencv")  # opencv/int or stream/url
-        source = request.form.get("source", "0")  # int for device index or URL
-        
-        # Optional configuration
-        auth_username = request.form.get("auth_username", "")
-        auth_password = request.form.get("auth_password", "")
-        fps = int(request.form.get("fps", 30))
-        resolution_width = int(request.form.get("resolution_width", 640))
-        resolution_height = int(request.form.get("resolution_height", 480))
+        # Handle both JSON and form data
+        if request.is_json:
+            data = request.get_json()
+            source = data.get("source", 0)
+            config = data.get("config", {})
+            name = config.get("name", "New Camera")
+            width = config.get("width", 640)
+            height = config.get("height", 480)
+            fps = config.get("fps", 30)
+            auth_username = ""
+            auth_password = ""
+            source_type = "opencv" if isinstance(source, int) else "stream"
+        else:
+            name = request.form.get("name", "").strip()
+            source_type = request.form.get("source_type", "opencv")
+            source = request.form.get("source", "0")
+            width = int(request.form.get("resolution_width", 640))
+            height = int(request.form.get("resolution_height", 480))
+            fps = int(request.form.get("fps", 30))
+            auth_username = request.form.get("auth_username", "")
+            auth_password = request.form.get("auth_password", "")
+            
+            # Parse source (convert to int if it's a device index)
+            if source_type == "opencv":
+                try:
+                    source = int(source)
+                except:
+                    source = 0
         
         if not name:
             return jsonify({"status": "failed", "msg": "Camera name required"}), 400
@@ -1506,13 +1550,6 @@ def create_camera():
         # Check if camera name exists
         if cameras_col.find_one({"name": name}):
             return jsonify({"status": "failed", "msg": "Camera name already exists"}), 400
-        
-        # Parse source (convert to int if it's a device index)
-        if source_type == "opencv":
-            try:
-                source = int(source)
-            except:
-                source = 0
         
         camera_id = f"{datetime.datetime.utcnow().timestamp()}_{name.replace(' ', '_')}"
         
@@ -1527,9 +1564,9 @@ def create_camera():
             } if auth_username else None,
             "config": {
                 "fps": fps,
-                "resolution": {"width": resolution_width, "height": resolution_height},
-                "detection_roi": None,  # Can be set later for specific area detection
-                "fallback_timeout": 30  # seconds before considering stream dead
+                "resolution": {"width": width, "height": height},
+                "detection_roi": None,
+                "fallback_timeout": 30
             },
             "enabled": True,
             "last_seen": None,
