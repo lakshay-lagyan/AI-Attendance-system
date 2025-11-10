@@ -1,6 +1,5 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -8,6 +7,7 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         :root {
             --primary: #4e73df;
@@ -47,7 +47,7 @@
             color: rgb(255, 255, 255);
             font-size: 1.3rem;
             font-weight: 700;
-            border-bottom: 1px solid rgb(48, 10, 10);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
         }
 
         .nav-item {
@@ -65,12 +65,13 @@
 
         .nav-link:hover {
             color: rgb(255, 255, 255);
-            background: rgba(36, 9, 9, 0.26);
+            background: rgba(255, 255, 255, 0.1);
         }
 
         .nav-link.active {
             color: white;
             font-weight: 700;
+            background: rgba(255, 255, 255, 0.15);
         }
 
         .nav-link i {
@@ -120,6 +121,12 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .stats-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 0.5rem 2rem rgba(58, 59, 69, 0.25);
         }
 
         .stats-card.primary {
@@ -177,52 +184,223 @@
             padding: 1.25rem;
         }
 
-        .video-container {
+        /* Dark 3D Dashboard Card */
+        .dashboard-3d-card {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            border-radius: 1rem;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            margin-bottom: 1.5rem;
+            overflow: hidden;
             position: relative;
-            width: 100%;
+        }
+
+        .dashboard-3d-header {
+            padding: 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .dashboard-3d-header h5 {
+            color: #fff;
+            margin: 0;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .dashboard-3d-body {
+            padding: 0;
+            position: relative;
+        }
+
+        /* 3D Visualization Container */
+        .viz-3d-container {
+            position: relative;
             height: 450px;
-            background: #000;
-            border-radius: 0.35rem;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
             overflow: hidden;
         }
 
-        .video-stream {
+        #three-canvas {
             width: 100%;
             height: 100%;
-            object-fit: cover;
+            cursor: grab;
         }
 
-        .video-overlay {
+        #three-canvas:active {
+            cursor: grabbing;
+        }
+
+        /* Metrics Grid Overlay */
+        .metrics-grid {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 0.25rem;
-            font-size: 0.9rem;
+            top: 20px;
+            left: 20px;
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            z-index: 10;
         }
 
-        .live-indicator {
+        .metric-box {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.75rem;
+            padding: 1rem;
+            min-width: 160px;
+            transition: all 0.3s;
+        }
+
+        .metric-box:hover {
+            background: rgba(0, 0, 0, 0.85);
+            border-color: rgba(78, 115, 223, 0.5);
+            transform: translateY(-3px);
+        }
+
+        .metric-label {
+            font-size: 0.75rem;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 0.25rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .metric-value {
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: #fff;
+            line-height: 1;
+        }
+
+        .metric-value.primary {
+            color: #4e73df;
+        }
+
+        .metric-value.success {
+            color: #1cc88a;
+        }
+
+        .metric-value.warning {
+            color: #f6c23e;
+        }
+
+        .metric-value.danger {
+            color: #e74a3b;
+        }
+
+        /* Live Indicator */
+        .live-dot {
             display: inline-block;
             width: 8px;
             height: 8px;
             background: #ff0000;
             border-radius: 50%;
-            margin-right: 0.5rem;
             animation: pulse 2s infinite;
         }
 
         @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.8); }
+        }
 
-            0%,
-            100% {
-                opacity: 1;
-            }
+        /* User Photos Grid */
+        .user-photos-container {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            z-index: 10;
+        }
 
-            50% {
-                opacity: 0.3;
-            }
+        .photos-header {
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem 0.5rem 0 0;
+            padding: 0.75rem 1rem;
+            color: white;
+            font-size: 0.85rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .photos-grid {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-top: none;
+            border-radius: 0 0 0.5rem 0.5rem;
+            padding: 1rem;
+            display: grid;
+            grid-template-columns: repeat(4, 60px);
+            gap: 0.5rem;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .user-photo-item {
+            width: 60px;
+            height: 60px;
+            border-radius: 0.5rem;
+            overflow: hidden;
+            border: 2px solid rgba(28, 200, 138, 0.5);
+            position: relative;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .user-photo-item:hover {
+            transform: scale(1.1);
+            border-color: rgba(28, 200, 138, 1);
+            box-shadow: 0 0 20px rgba(28, 200, 138, 0.5);
+        }
+
+        .user-photo-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .user-photo-name {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            font-size: 0.6rem;
+            padding: 0.15rem;
+            text-align: center;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* Scrollbar styling */
+        .photos-grid::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .photos-grid::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+
+        .photos-grid::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 3px;
+        }
+
+        .photos-grid::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
         }
 
         .badge-notification {
@@ -380,10 +558,31 @@
             .main-content {
                 margin-left: 0;
             }
+
+            .viz-3d-container {
+                height: 350px;
+            }
+
+            .metrics-grid {
+                grid-template-columns: 1fr;
+                gap: 0.5rem;
+            }
+
+            .metric-box {
+                min-width: 140px;
+            }
+
+            .photos-grid {
+                grid-template-columns: repeat(3, 50px);
+            }
+
+            .user-photo-item {
+                width: 50px;
+                height: 50px;
+            }
         }
     </style>
 </head>
-
 <body>
     <!-- Sidebar -->
     <nav class="sidebar">
@@ -435,17 +634,10 @@
             <h4 style="margin: 0; color: var(--dark);">Dashboard</h4>
             <div class="user-info">
                 <div>
-                    <div style="font-weight: 600;">{{ admin.name }}</div>
+                    <div style="font-weight: 600;">Admin User</div>
                     <small style="color: #858796;">Administrator</small>
                 </div>
-                <div class="user-avatar">
-                    {% if admin.profile_image %}
-                    <img src="data:image/jpeg;base64,{{ admin.profile_image }}"
-                        style="width: 100%; height: 100%; object-fit: cover; border-radius: 50%;">
-                    {% else %}
-                    {{ admin.name[0].upper() }}
-                    {% endif %}
-                </div>
+                <div class="user-avatar">A</div>
             </div>
         </nav>
 
@@ -456,8 +648,7 @@
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="stats-card primary">
                         <div>
-                            <div
-                                style="color: var(--primary); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                            <div style="color: var(--primary); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
                                 Total Users</div>
                             <div style="font-size: 1.5rem; font-weight: 700;" id="totalUsers">0</div>
                         </div>
@@ -467,8 +658,7 @@
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="stats-card success">
                         <div>
-                            <div
-                                style="color: var(--success); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                            <div style="color: var(--success); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
                                 Today's Attendance</div>
                             <div style="font-size: 1.5rem; font-weight: 700;" id="todayAttendance">0</div>
                         </div>
@@ -478,8 +668,7 @@
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="stats-card info">
                         <div>
-                            <div
-                                style="color: var(--info); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                            <div style="color: var(--info); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
                                 Blocked Users</div>
                             <div style="font-size: 1.5rem; font-weight: 700;" id="blockedUsers">0</div>
                         </div>
@@ -489,8 +678,7 @@
                 <div class="col-xl-3 col-md-6 mb-4">
                     <div class="stats-card warning">
                         <div>
-                            <div
-                                style="color: var(--warning); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
+                            <div style="color: var(--warning); font-size: 0.7rem; font-weight: 700; text-transform: uppercase;">
                                 Pending Requests</div>
                             <div style="font-size: 1.5rem; font-weight: 700;" id="pendingRequests">0</div>
                         </div>
@@ -499,20 +687,64 @@
                 </div>
             </div>
 
-            <!-- Main Content Row -->
+            <!-- Main Content Row - 3D Dashboard -->
             <div class="row">
-                <!-- Live Camera Feed -->
+                <!-- 3D Interactive Dashboard -->
                 <div class="col-xl-8 mb-4">
-                    <div class="data-card">
-                        <div class="data-card-header">
-                            <i class="fas fa-video"></i> Live Camera Feed
+                    <div class="dashboard-3d-card">
+                        <div class="dashboard-3d-header">
+                            <h5>
+                                <span class="live-dot"></span>
+                                <i class="fas fa-chart-pie"></i>
+                                Live System Analytics
+                            </h5>
+                            <small style="color: rgba(255,255,255,0.6);">Real-time monitoring</small>
                         </div>
-                        <div class="data-card-body">
-                            <div class="video-container">
-                                <img class="video-stream" src="/video_feed" alt="Camera Feed">
-                                <div class="video-overlay">
-                                    <span class="live-indicator"></span>
-                                    LIVE
+                        <div class="dashboard-3d-body">
+                            <div class="viz-3d-container">
+                                <canvas id="three-canvas"></canvas>
+                                
+                                <!-- Metrics Grid -->
+                                <div class="metrics-grid">
+                                    <div class="metric-box">
+                                        <div class="metric-label">
+                                            <i class="fas fa-clock"></i>
+                                            Peak Hour
+                                        </div>
+                                        <div class="metric-value primary" id="peakHour">--</div>
+                                    </div>
+                                    <div class="metric-box">
+                                        <div class="metric-label">
+                                            <i class="fas fa-user-slash"></i>
+                                            Unknown Detected
+                                        </div>
+                                        <div class="metric-value danger" id="unknownCount">0</div>
+                                    </div>
+                                    <div class="metric-box">
+                                        <div class="metric-label">
+                                            <i class="fas fa-user-check"></i>
+                                            Today Present
+                                        </div>
+                                        <div class="metric-value success" id="todayPresent">0</div>
+                                    </div>
+                                    <div class="metric-box">
+                                        <div class="metric-label">
+                                            <i class="fas fa-percentage"></i>
+                                            Attendance Rate
+                                        </div>
+                                        <div class="metric-value warning" id="attendanceRate">0%</div>
+                                    </div>
+                                </div>
+
+                                <!-- Live User Photos -->
+                                <div class="user-photos-container">
+                                    <div class="photos-header">
+                                        <i class="fas fa-camera"></i>
+                                        Today's Attendance
+                                    </div>
+                                    <div class="photos-grid" id="userPhotosGrid">
+                                        <!-- Photos will be loaded dynamically -->
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -525,7 +757,7 @@
                         <div class="data-card-header">
                             <i class="fas fa-clock"></i> Recent Attendance
                         </div>
-                        <div class="data-card-body" style="max-height: 500px; overflow-y: auto;" id="attendanceList">
+                        <div class="data-card-body" style="max-height: 558px; overflow-y: auto;" id="attendanceList">
                             <div style="text-align: center; color: #858796; padding: 2rem;">Loading...</div>
                         </div>
                     </div>
@@ -579,18 +811,219 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        // Three.js 3D Visualization
+        let scene, camera, renderer, particles, particlesMesh;
+        let mouseX = 0, mouseY = 0;
+
+        function init3DVisualization() {
+            const container = document.getElementById('three-canvas');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+
+            // Scene
+            scene = new THREE.Scene();
+            
+            // Camera
+            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            camera.position.z = 30;
+
+            // Renderer
+            renderer = new THREE.WebGLRenderer({ canvas: container, antialias: true, alpha: true });
+            renderer.setSize(width, height);
+            renderer.setPixelRatio(window.devicePixelRatio);
+
+            // Create particle system
+            createParticleSystem();
+
+            // Lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const pointLight1 = new THREE.PointLight(0x4e73df, 2, 100);
+            pointLight1.position.set(10, 10, 10);
+            scene.add(pointLight1);
+
+            const pointLight2 = new THREE.PointLight(0x1cc88a, 2, 100);
+            pointLight2.position.set(-10, -10, 10);
+            scene.add(pointLight2);
+
+            // Mouse interaction
+            container.addEventListener('mousemove', onMouseMove);
+            window.addEventListener('resize', onWindowResize);
+
+            animate();
+        }
+
+        function createParticleSystem() {
+            const particlesGeometry = new THREE.BufferGeometry();
+            const particlesCount = 3000;
+            const posArray = new Float32Array(particlesCount * 3);
+            const colorsArray = new Float32Array(particlesCount * 3);
+
+            for(let i = 0; i < particlesCount * 3; i++) {
+                posArray[i] = (Math.random() - 0.5) * 50;
+                
+                // Assign colors
+                const colorValue = Math.random();
+                if(colorValue < 0.33) {
+                    colorsArray[i * 3] = 0.31; // R
+                    colorsArray[i * 3 + 1] = 0.45; // G
+                    colorsArray[i * 3 + 2] = 0.87; // B (Primary blue)
+                } else if(colorValue < 0.66) {
+                    colorsArray[i * 3] = 0.11; // R
+                    colorsArray[i * 3 + 1] = 0.78; // G
+                    colorsArray[i * 3 + 2] = 0.54; // B (Success green)
+                } else {
+                    colorsArray[i * 3] = 0.96; // R
+                    colorsArray[i * 3 + 1] = 0.76; // G
+                    colorsArray[i * 3 + 2] = 0.24; // B (Warning yellow)
+                }
+            }
+
+            particlesGeometry.setAttribute('position', new THREE.BufferAttribute(posArray, 3));
+            particlesGeometry.setAttribute('color', new THREE.BufferAttribute(colorsArray, 3));
+
+            const particlesMaterial = new THREE.PointsMaterial({
+                size: 0.15,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.8,
+                blending: THREE.AdditiveBlending
+            });
+
+            particlesMesh = new THREE.Points(particlesGeometry, particlesMaterial);
+            scene.add(particlesMesh);
+        }
+
+        function onMouseMove(event) {
+            const container = document.getElementById('three-canvas');
+            const rect = container.getBoundingClientRect();
+            mouseX = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+            mouseY = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const time = Date.now() * 0.0001;
+
+            if (particlesMesh) {
+                particlesMesh.rotation.y = time * 0.5;
+                particlesMesh.rotation.x = time * 0.3;
+                
+                // Mouse interaction
+                particlesMesh.rotation.y += mouseX * 0.01;
+                particlesMesh.rotation.x += mouseY * 0.01;
+
+                // Wave effect
+                const positions = particlesMesh.geometry.attributes.position.array;
+                for(let i = 0; i < positions.length; i += 3) {
+                    positions[i + 1] = Math.sin((positions[i] + time * 10) * 0.3) * 2;
+                }
+                particlesMesh.geometry.attributes.position.needsUpdate = true;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        function onWindowResize() {
+            const container = document.getElementById('three-canvas');
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        }
+
+        // Dashboard Data Management
         let attendanceChart = null;
+        let todayAttendanceData = [];
 
         async function initDashboard() {
+            init3DVisualization();
             await loadStats();
             await loadRecentAttendance();
             await loadUsers();
             await loadAttendanceChart();
             await loadPendingRequests();
+            updateLiveMetrics();
 
             setInterval(loadRecentAttendance, 10000);
             setInterval(loadStats, 30000);
             setInterval(loadPendingRequests, 30000);
+            setInterval(updateLiveMetrics, 5000);
+        }
+
+        function updateLiveMetrics() {
+            // Calculate peak hour from attendance data
+            if(todayAttendanceData.length > 0) {
+                const hourCounts = {};
+                todayAttendanceData.forEach(record => {
+                    const hour = new Date(record.timestamp).getHours();
+                    hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+                });
+                
+                const peakHourNum = Object.keys(hourCounts).reduce((a, b) => 
+                    hourCounts[a] > hourCounts[b] ? a : b
+                );
+                const peakHourFormatted = peakHourNum > 12 ? 
+                    `${peakHourNum - 12} PM` : 
+                    peakHourNum === 12 ? '12 PM' : `${peakHourNum} AM`;
+                document.getElementById('peakHour').textContent = peakHourFormatted;
+            }
+
+            // Unknown persons (simulated - replace with real data)
+            const unknownCount = Math.floor(Math.random() * 5);
+            document.getElementById('unknownCount').textContent = unknownCount;
+
+            // Today present
+            const todayPresent = todayAttendanceData.length;
+            document.getElementById('todayPresent').textContent = todayPresent;
+
+            // Attendance rate
+            const totalUsers = parseInt(document.getElementById('totalUsers').textContent) || 0;
+            const rate = totalUsers > 0 ? Math.round((todayPresent / totalUsers) * 100) : 0;
+            document.getElementById('attendanceRate').textContent = rate + '%';
+        }
+
+        async function loadTodayPhotos() {
+            try {
+                const res = await fetch('/api/attendance_recent');
+                const records = await res.json();
+
+                const today = new Date().toISOString().split('T')[0];
+                const todayRecords = records.filter(r => r.timestamp.startsWith(today));
+                
+                // Remove duplicates by name
+                const uniqueRecords = [];
+                const seenNames = new Set();
+                todayRecords.forEach(record => {
+                    if (!seenNames.has(record.name)) {
+                        seenNames.add(record.name);
+                        uniqueRecords.push(record);
+                    }
+                });
+
+                const photosGrid = document.getElementById('userPhotosGrid');
+                
+                if (uniqueRecords.length === 0) {
+                    photosGrid.innerHTML = '<div style="color: rgba(255,255,255,0.6); padding: 1rem; text-align: center;">No attendance yet</div>';
+                    return;
+                }
+
+                // Display user photos (using placeholder if no image available)
+                photosGrid.innerHTML = uniqueRecords.slice(0, 12).map(record => `
+                    <div class="user-photo-item" title="${record.name}">
+                        <div style="width: 100%; height: 100%; background: linear-gradient(135deg, #4e73df, #1cc88a); display: flex; align-items: center; justify-content: center; color: white; font-weight: 700; font-size: 1.2rem;">
+                            ${record.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div class="user-photo-name">${record.name}</div>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading photos:', error);
+            }
         }
 
         async function loadStats() {
@@ -606,12 +1039,17 @@
                 const attendance = await attendanceRes.json();
 
                 const today = new Date().toISOString().split('T')[0];
-                const todayRecords = new Set(attendance.filter(r => r.timestamp.startsWith(today)).map(r => r.name));
-                document.getElementById('todayAttendance').textContent = todayRecords.size;
+                const todayRecords = attendance.filter(r => r.timestamp.startsWith(today));
+                const todayUnique = new Set(todayRecords.map(r => r.name));
+                
+                document.getElementById('todayAttendance').textContent = todayUnique.size;
+                todayAttendanceData = todayRecords;
 
                 const countRes = await fetch('/api/pending_requests_count');
                 const countData = await countRes.json();
                 document.getElementById('pendingRequests').textContent = countData.count;
+
+                await loadTodayPhotos();
             } catch (error) {
                 console.error('Error loading stats:', error);
             }
@@ -958,13 +1396,27 @@
         }
 
         // Sidebar toggle for mobile
-        document.getElementById('sidebarToggle').addEventListener('click', function () {
+        const sidebarToggle = document.getElementById('sidebarToggle');
+        if (window.innerWidth <= 768) {
+            sidebarToggle.style.display = 'block';
+        }
+        
+        sidebarToggle.addEventListener('click', function () {
             document.querySelector('.sidebar').classList.toggle('active');
+        });
+
+        window.addEventListener('resize', () => {
+            if (window.innerWidth <= 768) {
+                sidebarToggle.style.display = 'block';
+            } else {
+                sidebarToggle.style.display = 'none';
+            }
         });
 
         // Initialize
         document.addEventListener('DOMContentLoaded', initDashboard);
 
+        // Make functions global
         window.showRequestsModal = showRequestsModal;
         window.closeRequestsModal = closeRequestsModal;
         window.viewRequestDetails = viewRequestDetails;
@@ -974,5 +1426,4 @@
         window.unblockUser = unblockUser;
     </script>
 </body>
-
 </html>

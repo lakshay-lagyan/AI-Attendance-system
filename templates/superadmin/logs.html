@@ -2,9 +2,6 @@
 
 {% block title %}System Logs - Super Admin{% endblock %}
 
-{% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
-{% endblock %}
 
 {% block extra_styles %}
 <style>
@@ -27,7 +24,7 @@
                 <i class="fas fa-dashboard mr-3"></i> Dashboard
             </a>
             <a href="/superadmin/admins" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-user-shield mr-3"></i> Manage Admins
+                <i class="fas fa-user-shield mr-3"></i> Manage People
             </a>
             <a href="/superadmin/users" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
                 <i class="fas fa-users mr-3"></i> All Users
@@ -118,7 +115,7 @@ document.addEventListener('DOMContentLoaded', () => {
 async function loadLogs() {
     try {
         const filterType = document.getElementById('filterType').value;
-        const url = `/api/superadmin/logs?page=${currentPage}&per_page=20${filterType ? `&type=${filterType}` : ''}`;
+        const url = `/superadmin/logs?page=${currentPage}&per_page=20${filterType ? `&type=${filterType}` : ''}`;
         
         const response = await apiRequest(url);
         const data = await response.json();
