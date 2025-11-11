@@ -174,57 +174,83 @@ def index():
 @app.route("/login", methods=["GET", "POST"])
 @limiter.limit("10 per minute")
 def login():
-    if current_user.is_authenticated:
-        if current_user.role == 'superadmin':
-            return redirect(url_for("superadmin_dashboard"))
-        elif current_user.role == 'admin':
-            return redirect(url_for("admin_dashboard"))
-        return redirect(url_for("user_dashboard"))
-    
-    if request.method == "GET":
-        return render_template("login.html")
-    
-    email = request.form.get("email", "").strip().lower()
-    password = request.form.get("password", "")
-    remember = request.form.get("remember") == "on"
-    
-    if not email or not password:
-        flash("Email and password required.", "danger")
-        return redirect(url_for("login"))
-    
-    # Check super admin first
-    superadmin = superadmins_col.find_one({"email": email})
-    if superadmin:
-        hashed = superadmin.get("password_hash")
-        if hashed and check_password_hash(hashed, password):
-            user = SuperAdminUser(superadmin)
-            login_user(user, remember=remember)
-            return redirect(url_for("superadmin_dashboard"))
-    
-    # Check admin
-    admin = admins_col.find_one({"email": email})
-    if admin:
-        hashed = admin.get("password_hash")
-        if hashed and check_password_hash(hashed, password):
-            user = AdminUser(admin)
-            login_user(user, remember=remember)
-            return redirect(url_for("admin_dashboard"))
-    
-    # Check regular user
-    user_doc = users_col.find_one({"email": email})
-    if user_doc:
-        if user_doc.get("status") == "blocked":
-            flash("Your account has been blocked. Contact admin.", "danger")
+    try:
+        if current_user.is_authenticated:
+            if current_user.role == 'superadmin':
+                return redirect(url_for("superadmin_dashboard"))
+            elif current_user.role == 'admin':
+                return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("user_dashboard"))
+        
+        if request.method == "GET":
+            return render_template("login.html")
+        
+        email = request.form.get("email", "").strip().lower()
+        password = request.form.get("password", "")
+        remember = request.form.get("remember") == "on"
+        
+        if not email or not password:
+            flash("Email and password required.", "danger")
             return redirect(url_for("login"))
         
-        hashed = user_doc.get("password_hash")
-        if hashed and check_password_hash(hashed, password):
-            user = RegularUser(user_doc)
-            login_user(user, remember=remember)
-            return redirect(url_for("user_dashboard"))
+        # Check super admin first
+        try:
+            superadmin = superadmins_col.find_one({"email": email})
+            if superadmin:
+                hashed = superadmin.get("password_hash")
+                if hashed and check_password_hash(hashed, password):
+                    user = SuperAdminUser(superadmin)
+                    login_user(user, remember=remember)
+                    next_page = request.args.get('next')
+                    if next_page and next_page != '/logout':
+                        return redirect(next_page)
+                    return redirect(url_for("superadmin_dashboard"))
+        except Exception as e:
+            print(f"Superadmin login error: {e}")
+        
+        # Check admin
+        try:
+            admin = admins_col.find_one({"email": email})
+            if admin:
+                hashed = admin.get("password_hash")
+                if hashed and check_password_hash(hashed, password):
+                    user = AdminUser(admin)
+                    login_user(user, remember=remember)
+                    next_page = request.args.get('next')
+                    if next_page and next_page != '/logout':
+                        return redirect(next_page)
+                    return redirect(url_for("admin_dashboard"))
+        except Exception as e:
+            print(f"Admin login error: {e}")
+        
+        # Check regular user
+        try:
+            user_doc = users_col.find_one({"email": email})
+            if user_doc:
+                if user_doc.get("status") == "blocked":
+                    flash("Your account has been blocked. Contact admin.", "danger")
+                    return redirect(url_for("login"))
+                
+                hashed = user_doc.get("password_hash")
+                if hashed and check_password_hash(hashed, password):
+                    user = RegularUser(user_doc)
+                    login_user(user, remember=remember)
+                    next_page = request.args.get('next')
+                    if next_page and next_page != '/logout':
+                        return redirect(next_page)
+                    return redirect(url_for("user_dashboard"))
+        except Exception as e:
+            print(f"User login error: {e}")
+        
+        flash("Invalid credentials.", "danger")
+        return redirect(url_for("login"))
     
-    flash("Invalid credentials.", "danger")
-    return redirect(url_for("login"))
+    except Exception as e:
+        print(f"Login route error: {e}")
+        import traceback
+        traceback.print_exc()
+        flash("System error. Please try again later.", "danger")
+        return render_template("login.html")
 
 @app.route("/logout")
 @login_required
@@ -291,22 +317,34 @@ def create_admin():
 @admin_required
 def admin_dashboard():
     """Admin Dashboard"""
-    total_users = persons_col.count_documents({})
-    total_attendance = attendance_col.count_documents({})
-    pending_requests = enrollment_requests_col.count_documents({"status": "pending"})
-    today_attendance = attendance_col.count_documents({
-        "timestamp": {
-            "$gte": datetime.datetime.combine(datetime.date.today(), datetime.time.min),
-            "$lt": datetime.datetime.combine(datetime.date.today(), datetime.time.max)
-        }
-    })
-    
-    return render_template("admin_dashboard.html",
-                         admin=current_user,
-                         total_users=total_users,
-                         total_attendance=total_attendance,
-                         pending_requests=pending_requests,
-                         today_attendance=today_attendance)
+    try:
+        total_users = persons_col.count_documents({})
+        total_attendance = attendance_col.count_documents({})
+        pending_requests = enrollment_requests_col.count_documents({"status": "pending"})
+        today_attendance = attendance_col.count_documents({
+            "timestamp": {
+                "$gte": datetime.datetime.combine(datetime.date.today(), datetime.time.min),
+                "$lt": datetime.datetime.combine(datetime.date.today(), datetime.time.max)
+            }
+        })
+        
+        return render_template("admin_dashboard.html",
+                             admin=current_user,
+                             total_users=total_users,
+                             total_attendance=total_attendance,
+                             pending_requests=pending_requests,
+                             today_attendance=today_attendance)
+    except Exception as e:
+        print(f"Admin dashboard error: {e}")
+        import traceback
+        traceback.print_exc()
+        flash("Error loading dashboard. Please try again.", "danger")
+        return render_template("admin_dashboard.html",
+                             admin=current_user,
+                             total_users=0,
+                             total_attendance=0,
+                             pending_requests=0,
+                             today_attendance=0)
 
 @app.route("/superadmin/stats")
 @superadmin_required
