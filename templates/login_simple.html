@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sign In - Smart Attendance System</title>
+    <style>
+        :root{
+          --bg-blur: 18px;
+          --transition-fast: 220ms;
+          --transition-medium: 400ms;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            margin: 0; padding: 0; 
+        }
+        .login-container {
+            min-height: 100vh;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+            background: #0a1929;
+        }
+        .bg-layer {
+            position: absolute;
+            inset: 0;
+            z-index: 0; 
+            overflow: hidden;
+        }
+        .bg-slide {
+            position: absolute;
+            inset: -10%;
+            background-size: cover;
+            background-position: center;
+            filter: blur(var(--bg-blur)) saturate(1.05);
+            transform: scale(1.06);
+            opacity: 1;
+            transition: opacity var(--transition-medium) ease;
+        }
+        .bg-slide.hidden { opacity: 0; }
+        .bg-dim {
+            position: absolute; inset: 0; 
+            background: linear-gradient(180deg, rgba(10,19,41,0.18), rgba(4,6,11,0.6));
+            z-index: 1;
+        }
+        .login-left {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            position: relative;
+            z-index: 2;
+            background: linear-gradient(135deg, rgba(30,58,138,0.08) 0%, rgba(15,23,42,0.08) 100%);
+        }
+        .login-right {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2rem;
+            background: rgba(10,25,41,0.05);
+            z-index: 2;
+        }
+        .face-image {
+            max-width: 100%;
+            max-height: 500px;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.4);
+            transition: transform var(--transition-fast) ease;
+        }
+        .face-image:hover {
+            transform: translateY(-8px) scale(1.035);
+        }
+        .signin-form { width: 100%; max-width: 400px; }
+        .form-title { color: #fff; font-size: 2rem; font-weight: 600; margin-bottom: 2rem; }
+        .form-label { color: #94a3b8; font-size: 0.875rem; margin-bottom: 0.5rem; display: block; }
+        .form-input {
+            width: 100%; padding: 0.875rem 1rem; background: #1e293b; border: 1px solid #334155;
+            border-radius: 8px; color: #fff; font-size: 0.9375rem; margin-bottom: 1.25rem;
+        }
+        .form-input:focus { outline: none; border-color: #3b82f6; background: #0f172a; }
+        .btn-signin {
+            width: 100%; padding: 0.875rem; background: #3b82f6; color: #fff; border: none; 
+            border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;
+        }
+        .btn-signin:hover { background: #2563eb; }
+        .signup-link { text-align: center; margin-top: 1.5rem; color: #94a3b8; }
+        .signup-link a { color: #3b82f6; text-decoration: none; }
+        .app-title { color: #f7f4f4; font-size: 1.25rem; font-weight: 700; margin-bottom: 2rem; }
+        .flash {
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            font-size: 14px;
+        }
+        .flash-danger {
+            background: rgba(239, 68, 68, 0.12);
+            color: #ffb3b3;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        @media (max-width: 768px) {
+            .login-container { flex-direction: column; }
+            .login-left { display: none; } 
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="bg-layer">
+            <div class="bg-slide" style="background-image: url('/static/assets/scan.jpg');"></div>
+            <div class="bg-dim"></div>
+        </div>
+
+        <div class="login-left">
+            <img src="/static/assets/home-page.jpg" alt="Face Recognition" class="face-image" />
+        </div>
+
+        <div class="login-right">
+            <div class="signin-form">
+                <div class="app-title"><h1>Smart Attendance System</h1></div>
+                <h1 class="form-title">Sign in</h1>
+
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, msg in messages %}
+                <div class="flash flash-{{ category }}">{{ msg }}</div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div>
+                        <label class="form-label" for="email">Email</label>
+                        <input type="email" id="email" name="email" required class="form-input" placeholder="you@company.com" autocomplete="email">
+                    </div>
+
+                    <div>
+                        <label class="form-label" for="password">Password</label>
+                        <input type="password" id="password" name="password" required class="form-input" placeholder="Your password" autocomplete="current-password">
+                    </div>
+
+                    <button type="submit" class="btn-signin">Sign in</button>
+                </form>
+
+                <div class="signup-link">
+                    Don't have an account? <a href="/registration_request">Request Enrollment</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

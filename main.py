@@ -30,8 +30,8 @@ limiter = Limiter(
 )
 
 # MONGODB
-MONGODB_URI = os.environ.get("MONGODB_URI")
-client = MongoClient(MONGODB_URI)
+MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
+client = MongoClient(MONGODB_URI, serverSelectionTimeoutMS=10000)
 
 transactional_db = client["transactional_db"]
 attendance_col = transactional_db["attendance"]
@@ -149,7 +149,7 @@ def superadmin_required(f):
             return redirect(url_for('index'))
         return f(*args, **kwargs)
     return decorated_function
-
+                                                                                                                                                                                            
 def admin_required(f):
     @wraps(f)
     @login_required
@@ -183,7 +183,23 @@ def login():
             return redirect(url_for("user_dashboard"))
         
         if request.method == "GET":
-            return render_template("login.html")
+            try:
+                return render_template("login_simple.html")
+            except Exception as template_error:
+                print(f"❌ Template rendering error: {template_error}")
+                import traceback
+                traceback.print_exc()
+                # Fallback to basic HTML if template fails
+                return '''
+                <html><body style="font-family:sans-serif;max-width:400px;margin:100px auto;padding:20px;">
+                <h2>Sign In</h2>
+                <form method="POST">
+                <input name="email" type="email" placeholder="Email" required style="width:100%;padding:10px;margin:10px 0;"><br>
+                <input name="password" type="password" placeholder="Password" required style="width:100%;padding:10px;margin:10px 0;"><br>
+                <button type="submit" style="width:100%;padding:10px;background:#3b82f6;color:white;border:none;cursor:pointer;">Sign In</button>
+                </form>
+                </body></html>
+                ''', 200
         
         email = request.form.get("email", "").strip().lower()
         password = request.form.get("password", "")
@@ -246,11 +262,17 @@ def login():
         return redirect(url_for("login"))
     
     except Exception as e:
-        print(f"Login route error: {e}")
+        print(f"❌ Login route error: {e}")
         import traceback
         traceback.print_exc()
-        flash("System error. Please try again later.", "danger")
-        return render_template("login.html")
+        # Return basic fallback
+        return '''
+        <html><body style="font-family:sans-serif;max-width:400px;margin:100px auto;padding:20px;background:#0f172a;color:#fff;">
+        <h2 style="color:#ef4444;">System Error</h2>
+        <p>Please try again later or contact support.</p>
+        <a href="/login" style="color:#3b82f6;">Back to Login</a>
+        </body></html>
+        ''', 500
 
 @app.route("/logout")
 @login_required
