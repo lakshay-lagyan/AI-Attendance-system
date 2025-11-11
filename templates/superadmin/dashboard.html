@@ -8,34 +8,95 @@
 
 {% block extra_styles %}
 <style>
-    .sidebar {
-        transition: transform 0.3s ease;
-    }
-    @media (max-width: 768px) {
-        .sidebar.hidden-mobile {
-            transform: translateX(-100%);
-        }
-    }
-    .stat-card {
-        transition: transform 0.2s, box-shadow 0.2s;
-    }
-    .stat-card:hover {
-        transform: translateY(-4px);
-        box-shadow: 0 12px 24px rgba(0, 0, 0, 0.15);
-    }
-    .live-indicator {
-        animation: pulse 2s ease-in-out infinite;
-    }
-    @keyframes pulse {
-        0%, 100% { opacity: 1; }
-        50% { opacity: 0.5; }
-    }
-    #cameraFeed {
-        border-radius: 8px;
-        background: #1a1a1a;
-    }
+/* Root + sizing */
+.dashboard-root { --sidebar-width: 260px; --sidebar-compact: 72px; --sidebar-transition: 360ms cubic-bezier(.2,.9,.2,1); perspective:1200px; }
+
+/* Sidebar base */
+.sidebar {
+  width: var(--sidebar-width);
+  height: 100vh;
+  transform-origin: left center;
+  transition: transform var(--sidebar-transition), width 220ms ease, box-shadow 220ms ease;
+  z-index: 50;
+  position: fixed; left: 0; top: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  will-change: transform, box-shadow;
+}
+
+/* Desktop static/flow override */
+@media (min-width: 768px) {
+  .sidebar { position: sticky; top: 0; }
+}
+
+/* Mobile closed state (off-canvas) */
+.sidebar.closed {
+  transform: translateX(-110%) rotateY(-10deg) scale(0.98);
+  box-shadow: none;
+}
+
+/* Mobile open state (overlay) */
+.sidebar.open {
+  transform: translateX(0) rotateY(0) scale(1);
+  box-shadow: 0 30px 90px rgba(3,7,18,0.45);
+}
+
+/* Desktop compact (icons only) */
+.sidebar.compact { width: var(--sidebar-compact); transform: translateX(0) rotateY(-6deg) translateZ(6px); }
+.sidebar.compact .nav-label { display: none; }
+.sidebar.compact .nav-icon { width: 40px; text-align:center; margin-right:0; }
+
+/* Backdrop for mobile overlay */
+.sidebar-backdrop {
+  position: fixed; inset: 0; background: rgba(2,6,23,0.45);
+  opacity: 0; visibility: hidden; transition: opacity 240ms ease, visibility 240ms;
+  z-index: 45;
+}
+.sidebar-backdrop.visible { opacity: 1; visibility: visible; }
+
+/* Content push when sidebar open on desktop */
+.content-area { transition: margin-left var(--sidebar-transition), padding var(--sidebar-transition); }
+@media (min-width: 1024px) {
+  .content-area.sidebar-open-desktop { margin-left: var(--sidebar-width); }
+  .content-area.sidebar-compact-desktop { margin-left: var(--sidebar-compact); }
+}
+
+/* Nav item polish */
+.sidebar .nav-link { display:flex; align-items:center; gap:.75rem; padding:.7rem 1rem; border-radius:8px; transition: background 160ms, transform 160ms; }
+.sidebar .nav-link:hover { transform: translateX(6px); background: rgba(255,255,255,0.04); }
+.sidebar .nav-icon { width:28px; display:inline-flex; justify-content:center; }
+
+/* Stat card hover */
+.stat-card { transition: transform 180ms ease, box-shadow 180ms ease; }
+.stat-card:hover { transform: translateY(-6px); box-shadow: 0 18px 40px rgba(7,11,30,0.06); }
+
+/* Grid responsive tweaks */
+@media (min-width: 1024px) {
+  .grid-lg-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 767px) {
+  .sidebar { width: 86%; max-width: 320px; }
+  .sidebar.compact { width: 86%; } /* compact works as normal open on phones */
+}
+
+/* Live indicator pulse (respect reduced motion) */
+@media (prefers-reduced-motion: no-preference) {
+  .live-indicator { animation: pulse 2s ease-in-out infinite; }
+}
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
+
+/* Camera placeholder and video style */
+#cameraFeed { border-radius: 8px; background:#0b1220; display:none; width:100%; height:100%; object-fit:cover; }
+#cameraPlaceholder { display:flex; }
+
+/* Accessibility focus */
+.sidebar :focus, #menuToggle:focus, .nav-link:focus { outline: 3px solid rgba(99,102,241,0.14); outline-offset: 2px; border-radius:6px; }
+
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .sidebar, .content-area, .sidebar-backdrop, .stat-card { transition: none !important; animation: none !important; transform: none !important; }
+}
 </style>
 {% endblock %}
+
 
 {% block content %}
 <div class="flex h-screen bg-gray-50">
@@ -262,6 +323,148 @@
         </div>
     </div>
 </div>
+
+<script>
+(function(){
+  const sidebar = document.getElementById('sidebar');
+  const menuToggle = document.getElementById('menuToggle');
+  const backdrop = document.getElementById('sidebarBackdrop');
+  const content = document.querySelector('.content-area') || document.querySelector('.flex-1');
+
+  // persist key for compact desktop sidebar
+  const COMPACT_KEY = 'sa_sidebar_compact_v1';
+
+  function isDesktop() { return window.matchMedia('(min-width: 1024px)').matches; }
+
+  // initialize states on load
+  function initSidebar() {
+    const compact = localStorage.getItem(COMPACT_KEY) === '1';
+    if (isDesktop()) {
+      // desktop: open by default (full) or compact if persisted
+      sidebar.classList.remove('closed');
+      if (compact) {
+        sidebar.classList.add('compact'); sidebar.classList.remove('open');
+        content && content.classList.add('sidebar-compact-desktop');
+        content && content.classList.remove('sidebar-open-desktop');
+      } else {
+        sidebar.classList.add('open'); sidebar.classList.remove('compact');
+        content && content.classList.add('sidebar-open-desktop');
+        content && content.classList.remove('sidebar-compact-desktop');
+      }
+      backdrop.classList.remove('visible');
+      document.body.style.overflow = '';
+    } else {
+      // mobile: closed by default (off-canvas)
+      sidebar.classList.add('closed'); sidebar.classList.remove('open'); sidebar.classList.remove('compact');
+      backdrop.classList.remove('visible');
+      content && content.classList.remove('sidebar-open-desktop', 'sidebar-compact-desktop');
+    }
+    updateAria();
+  }
+
+  // Toggle invoked by menu button
+  function toggleSidebar(e) {
+    // SHIFT-click on desktop toggles compact state
+    if (isDesktop() && e && e.shiftKey) {
+      const nowCompact = sidebar.classList.toggle('compact');
+      if (nowCompact) {
+        sidebar.classList.remove('open'); content && content.classList.add('sidebar-compact-desktop'); content && content.classList.remove('sidebar-open-desktop');
+        localStorage.setItem(COMPACT_KEY, '1');
+      } else {
+        sidebar.classList.add('open'); content && content.classList.add('sidebar-open-desktop'); content && content.classList.remove('sidebar-compact-desktop');
+        localStorage.setItem(COMPACT_KEY, '0');
+      }
+    } else if (isDesktop()) {
+      // Desktop normal toggle: switch between open <-> compact
+      if (sidebar.classList.contains('compact')) {
+        sidebar.classList.remove('compact'); sidebar.classList.add('open');
+        localStorage.setItem(COMPACT_KEY, '0');
+        content && content.classList.add('sidebar-open-desktop'); content && content.classList.remove('sidebar-compact-desktop');
+      } else if (sidebar.classList.contains('open')) {
+        // go to compact mode
+        sidebar.classList.remove('open'); sidebar.classList.add('compact');
+        localStorage.setItem(COMPACT_KEY, '1');
+        content && content.classList.add('sidebar-compact-desktop'); content && content.classList.remove('sidebar-open-desktop');
+      } else {
+        // closed -> open
+        sidebar.classList.add('open'); sidebar.classList.remove('closed');
+        content && content.classList.add('sidebar-open-desktop');
+        localStorage.setItem(COMPACT_KEY, '0');
+      }
+    } else {
+      // Mobile overlay open/close
+      if (sidebar.classList.contains('open') && !sidebar.classList.contains('closed')) {
+        closeMobile();
+      } else {
+        openMobile();
+      }
+    }
+    updateAria();
+  }
+
+  function openMobile() {
+    sidebar.classList.remove('closed'); sidebar.classList.add('open');
+    backdrop.classList.add('visible');
+    // lock document scroll
+    document.documentElement.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
+    // focus first focusable in sidebar
+    setTimeout(()=> {
+      const focusable = sidebar.querySelector('button, a, input, select, textarea');
+      if (focusable) focusable.focus();
+    }, 140);
+    updateAria();
+  }
+
+  function closeMobile() {
+    sidebar.classList.add('closed'); sidebar.classList.remove('open');
+    backdrop.classList.remove('visible');
+    document.documentElement.style.overflow = ''; document.body.style.overflow = '';
+    if (menuToggle) menuToggle.focus();
+    updateAria();
+  }
+
+  function updateAria() {
+    const expanded = sidebar.classList.contains('open') && !sidebar.classList.contains('closed');
+    if (menuToggle) menuToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+    sidebar.setAttribute('aria-hidden', (!expanded && !isDesktop()) ? 'true' : 'false');
+  }
+
+  // click outside handler for mobile
+  document.addEventListener('click', (e) => {
+    if (!isDesktop()) {
+      if (!sidebar.contains(e.target) && !menuToggle.contains(e.target) && sidebar.classList.contains('open')) {
+        closeMobile();
+      }
+    }
+  });
+
+  // backdrop click closes
+  backdrop.addEventListener('click', () => { if (!isDesktop()) closeMobile(); });
+
+  // Esc key to close mobile overlay
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+      if (!isDesktop() && sidebar.classList.contains('open')) closeMobile();
+    }
+  });
+
+  // Ensure layout updates on resize
+  let resizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(initSidebar, 150);
+  });
+
+  // Attach handler
+  if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
+
+  // Init on DOM ready
+  document.addEventListener('DOMContentLoaded', initSidebar);
+
+  // Expose minimal API for console
+  window.SAAdminUI = { openMobile, closeMobile, toggleSidebar, initSidebar };
+})();
+</script>
 
 <script>
 let sidebar, menuToggle;
