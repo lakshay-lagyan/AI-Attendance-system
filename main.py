@@ -1219,30 +1219,60 @@ def superadmin_manage_people():
 @superadmin_required
 def superadmin_admins():
     """Manage Admins"""
-    admins = list(admins_col.find({}, {"password_hash": 0}))
-    for admin in admins:
-        admin["_id"] = str(admin["_id"])
-        if "created_at" in admin:
-            try:
-                admin["created_at"] = admin["created_at"].isoformat()
-            except:
-                pass
-    return render_template("superadmin/admins.html", superadmin=current_user, admins=admins)
+    try:
+        admins = list(admins_col.find({}, {"password_hash": 0}))
+        for admin in admins:
+            admin["_id"] = str(admin.get("_id", ""))
+            admin["id"] = admin["_id"]  # Add id field for frontend
+            if "created_at" in admin and admin["created_at"]:
+                try:
+                    if hasattr(admin["created_at"], 'isoformat'):
+                        admin["created_at"] = admin["created_at"].isoformat()
+                    else:
+                        admin["created_at"] = str(admin["created_at"])
+                except Exception as e:
+                    admin["created_at"] = None
+                    print(f"Date conversion error: {e}")
+            else:
+                admin["created_at"] = None
+            
+            # Ensure required fields exist
+            admin["name"] = admin.get("name", "Unknown")
+            admin["email"] = admin.get("email", "")
+            admin["department"] = admin.get("department", "")
+            admin["is_active"] = admin.get("is_active", True)
+        
+        return render_template("superadmin/admins.html", superadmin=current_user, admins=admins)
+    except Exception as e:
+        print(f"Error in superadmin_admins: {e}")
+        import traceback
+        traceback.print_exc()
+        flash(f'Error loading admins: {str(e)}', 'danger')
+        return render_template("superadmin/admins.html", superadmin=current_user, admins=[])
 
 @app.route("/api/superadmin/create_admin", methods=["POST"])
 @superadmin_required
 def superadmin_create_admin():
     """Create new admin"""
     try:
-        name = request.form.get("name", "").strip()
-        email = request.form.get("email", "").strip().lower()
-        password = request.form.get("password", "")
+        # Handle both JSON and form data
+        if request.is_json:
+            data = request.get_json()
+            name = data.get("name", "").strip()
+            email = data.get("email", "").strip().lower()
+            password = data.get("password", "")
+            department = data.get("department", "").strip()
+        else:
+            name = request.form.get("name", "").strip()
+            email = request.form.get("email", "").strip().lower()
+            password = request.form.get("password", "")
+            department = request.form.get("department", "").strip()
         
         if not name or not email or not password:
-            return jsonify({"status": "failed", "msg": "All fields required"}), 400
+            return jsonify({"status": "failed", "error": "All fields required", "msg": "All fields required"}), 400
         
         if admins_col.find_one({"email": email}):
-            return jsonify({"status": "failed", "msg": "Admin already exists"}), 400
+            return jsonify({"status": "failed", "error": "Admin already exists", "msg": "Admin already exists"}), 400
         
         admin_id = f"{datetime.datetime.utcnow().timestamp()}_{email}"
         admin_doc = {
@@ -1250,7 +1280,9 @@ def superadmin_create_admin():
             "name": name,
             "email": email,
             "password_hash": generate_password_hash(password),
+            "department": department if department else None,
             "profile_image": "",
+            "is_active": True,
             "created_at": datetime.datetime.utcnow(),
             "created_by": current_user.email
         }
