@@ -6,8 +6,9 @@ import faiss
 import datetime
 import pickle
 from pymongo import MongoClient
+from collections import deque
 
-# MongoDB connection (use environment variable)
+# MongoDB connection
 MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
 client = MongoClient(MONGODB_URI)
 
@@ -18,10 +19,18 @@ attendance_col = transactional_db["attendance"]
 core = client['secure_db']
 persons_col = core["persons"]
 
-# FAISS setup
+# Enhanced FAISS setup with HNSW for better performance
 EMBEDDING_DIM = 512
 faiss_index = None
 person_id_map = []
+
+# Performance tracking
+detection_stats = {
+    'total_detections': 0,
+    'successful_recognitions': 0,
+    'unknown_persons': 0,
+    'occluded_faces': 0
+}
 
 def cosine_sim(a, b) -> float:
     """Calculate cosine similarity between two vectors"""
@@ -30,33 +39,54 @@ def cosine_sim(a, b) -> float:
     denom = (np.linalg.norm(a) * np.linalg.norm(b)) + 1e-8
     return float(np.dot(a, b) / denom)
 
+def detect_occlusion(face_img):
+    """Detect if face is occluded (mask, hand, object)"""
+    try:
+        gray = cv.cvtColor(face_img, cv.COLOR_BGR2GRAY)
+        h, w = gray.shape
+        
+        # Check lower face area (likely occluded by mask)
+        lower_face = gray[int(h*0.6):, :]
+        upper_face = gray[:int(h*0.5), :]
+        
+        # Calculate variance - occluded areas have less variance
+        lower_var = np.var(lower_face)
+        upper_var = np.var(upper_face)
+        
+        # If lower face has significantly less variance, likely occluded
+        occlusion_score = upper_var / (lower_var + 1e-8)
+        
+        return occlusion_score > 2.0, occlusion_score
+    except:
+        return False, 0.0
+
 def is_real_face(face_img):
-    """Enhanced liveness detection"""
+    """Enhanced liveness detection with occlusion tolerance"""
     try:
         if face_img is None or face_img.size == 0:
             return False
         
         gray = cv.cvtColor(face_img, cv.COLOR_BGR2GRAY)
         
-        # 1. Laplacian variance (blur detection)
+        # 1. Laplacian variance (blur detection) - relaxed for occluded faces
         laplacian_var = cv.Laplacian(gray, cv.CV_64F).var()
-        if laplacian_var < 50:
+        if laplacian_var < 30:  # Lowered from 50
             return False
         
         # 2. Check brightness
         brightness = np.mean(gray)
-        if brightness < 30 or brightness > 225:
+        if brightness < 20 or brightness > 235:  # More tolerant
             return False
         
-        # 3. Check contrast
+        # 3. Check contrast - relaxed for occluded faces
         contrast = np.std(gray)
-        if contrast < 20:
+        if contrast < 15:  # Lowered from 20
             return False
         
-        # 4. Edge detection
-        edges = cv.Canny(gray, 50, 150)
+        # 4. Edge detection - tolerant to partial occlusion
+        edges = cv.Canny(gray, 30, 120)  # Lowered thresholds
         edge_density = np.sum(edges > 0) / edges.size
-        if edge_density < 0.01:
+        if edge_density < 0.005:  # More tolerant
             return False
         
         return True
@@ -64,8 +94,8 @@ def is_real_face(face_img):
         print(f"[Liveness Error] {e}")
         return False
 
-def get_face_embedding(image):
-    """Extract face embedding using DeepFace ArcFace"""
+def get_face_embedding(image, handle_occlusion=True):
+    """Extract face embedding with occlusion handling"""
     try:
         if hasattr(image, 'read'):
             file_bytes = np.frombuffer(image.read(), np.uint8)
@@ -74,14 +104,20 @@ def get_face_embedding(image):
         if image is None or image.size == 0:
             return None
         
+        # Check for occlusion
+        is_occluded, occlusion_score = detect_occlusion(image)
+        
         if not is_real_face(image):
             print("[Warning] Fake face or low quality detected")
             return None
         
+        # Use RetinaFace for better detection with occlusions
+        detector_backend = 'retinaface' if handle_occlusion else 'opencv'
+        
         embedding_obj = DeepFace.represent(
             img_path=image,
             model_name='ArcFace',
-            detector_backend='opencv',
+            detector_backend=detector_backend,
             enforce_detection=False
         )
         
@@ -90,6 +126,11 @@ def get_face_embedding(image):
         
         embedding = np.array(embedding_obj[0]['embedding'])
         embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
+        
+        # Store occlusion info
+        if is_occluded:
+            detection_stats['occluded_faces'] += 1
+        
         return embedding
     except Exception as e:
         print(f"[Embedding Error] {e}")
@@ -160,13 +201,13 @@ def create_3d_template(embeddings_data):
     }
 
 def continuous_learning_update(name, new_embedding, confidence):
-    """Continuously improve embeddings with new successful recognitions - MongoDB version"""
+    """Continuously improve embeddings with new successful recognitions"""
     try:
         person = persons_col.find_one({"name": name})
         if not person:
             return False
         
-        if confidence < 0.75:
+        if confidence < 0.70:  # Lowered threshold for occluded faces
             return False
         
         stored_template = pickle.loads(person['embedding'])
@@ -177,7 +218,7 @@ def continuous_learning_update(name, new_embedding, confidence):
             current_centroid = stored_template
         
         # Exponential moving average
-        alpha = 0.1
+        alpha = 0.15  # Increased for faster adaptation to occlusions
         updated_centroid = (1 - alpha) * current_centroid + alpha * new_embedding
         updated_centroid = updated_centroid / (np.linalg.norm(updated_centroid) + 1e-8)
         
@@ -202,7 +243,7 @@ def continuous_learning_update(name, new_embedding, confidence):
         )
         
         # Rebuild FAISS periodically
-        if update_count % 50 == 0:
+        if update_count % 30 == 0:  # More frequent rebuilds
             rebuild_faiss_index()
         
         print(f"[Continuous Learning] Updated template for {name} (confidence: {confidence:.3f})")
@@ -211,8 +252,8 @@ def continuous_learning_update(name, new_embedding, confidence):
         print(f"[Continuous Learning Error] {e}")
         return False
 
-def ensemble_matching(query_embedding, stored_template, threshold=0.6):
-    """Enhanced matching using ensemble of embeddings"""
+def ensemble_matching(query_embedding, stored_template, threshold=0.55):
+    """Enhanced matching with lower threshold for occluded faces"""
     scores = []
     
     if isinstance(stored_template, dict) and 'centroid' in stored_template:
@@ -236,7 +277,7 @@ def ensemble_matching(query_embedding, stored_template, threshold=0.6):
         return max(scores) if scores else 0.0
 
 def initialize_faiss_index():
-    """Initialize FAISS index from disk or create new"""
+    """Initialize FAISS index with HNSW for better performance"""
     global faiss_index, person_id_map
     
     index_path = "faiss_index.bin"
@@ -247,15 +288,21 @@ def initialize_faiss_index():
             faiss_index = faiss.read_index(index_path)
             with open(map_path, 'rb') as f:
                 person_id_map = pickle.load(f)
-            print(f"✅ Loaded FAISS index with {faiss_index.ntotal} faces")
+            print(f"✅ Loaded HNSW FAISS index with {faiss_index.ntotal} faces")
         except Exception as e:
             print(f"[FAISS Load Error] {e}, creating new index")
-            faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+            # Use HNSW for faster approximate search
+            faiss_index = faiss.IndexHNSWFlat(EMBEDDING_DIM, 32)  # 32 neighbors
+            faiss_index.hnsw.efConstruction = 200  # Build quality
+            faiss_index.hnsw.efSearch = 64  # Search quality
             person_id_map = []
     else:
-        faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+        # Create HNSW index for better performance with large datasets
+        faiss_index = faiss.IndexHNSWFlat(EMBEDDING_DIM, 32)
+        faiss_index.hnsw.efConstruction = 200
+        faiss_index.hnsw.efSearch = 64
         person_id_map = []
-        print("✅ Created new FAISS index")
+        print("✅ Created new HNSW FAISS index")
 
 def save_faiss_index():
     """Save FAISS index to disk"""
@@ -268,10 +315,13 @@ def save_faiss_index():
         print(f"[FAISS Save Error] {e}")
 
 def rebuild_faiss_index():
-    """Rebuild FAISS index from MongoDB"""
+    """Rebuild FAISS HNSW index from MongoDB"""
     global faiss_index, person_id_map
     
-    faiss_index = faiss.IndexFlatIP(EMBEDDING_DIM)
+    # Use HNSW for better performance
+    faiss_index = faiss.IndexHNSWFlat(EMBEDDING_DIM, 32)
+    faiss_index.hnsw.efConstruction = 200
+    faiss_index.hnsw.efSearch = 64
     person_id_map = []
     
     # Get persons from MongoDB (exclude blocked users)
@@ -304,22 +354,23 @@ def rebuild_faiss_index():
             continue
     
     save_faiss_index()
-    print(f"[FAISS] Rebuilt index with {len(person_id_map)} persons")
+    print(f"[FAISS] Rebuilt HNSW index with {len(person_id_map)} persons")
     
     return len(person_id_map)
 
-def search_face_faiss(embedding, threshold=0.6):
-    """Enhanced FAISS search with continuous learning - MongoDB version"""
+def search_face_faiss(embedding, threshold=0.55):
+    """Enhanced FAISS search with lower threshold for occluded faces"""
     if faiss_index is None or faiss_index.ntotal == 0:
         return None, 0.0
     
     # Normalize embedding
     embedding = embedding / (np.linalg.norm(embedding) + 1e-8)
     
-    # Search in FAISS index
+    # Search in FAISS index - get top 5 for better matching
+    k = min(5, faiss_index.ntotal)
     distances, indices = faiss_index.search(
         np.array([embedding], dtype=np.float32),
-        k=min(3, faiss_index.ntotal)
+        k=k
     )
     
     best_name = None
@@ -342,23 +393,30 @@ def search_face_faiss(embedding, threshold=0.6):
                     best_score = ensemble_score
                     best_name = matched_name
         
-        # Continuous learning
-        if best_name and best_score >= 0.75:
+        # Continuous learning with relaxed threshold
+        if best_name and best_score >= 0.70:
             continuous_learning_update(best_name, embedding, best_score)
         
         if best_score >= threshold:
+            detection_stats['successful_recognitions'] += 1
             return best_name, best_score
+        else:
+            detection_stats['unknown_persons'] += 1
     except Exception as e:
         print(f"[Search Error] {e}")
     
     return None, 0.0
 
 def generate_camera_stream():
-    """Enhanced camera stream with continuous learning - MongoDB version"""
+    """Enhanced camera stream with CROWD DETECTION and OCCLUSION handling"""
     cap = cv.VideoCapture(0)
-    threshold = 0.6
+    threshold = 0.55  # Lowered for occluded faces
     marked_attendance = {}
     cooldown_period = 300  # 5 minutes
+    
+    # Performance tracking
+    fps_queue = deque(maxlen=30)
+    last_time = datetime.datetime.now()
     
     if not cap.isOpened():
         print("❌ Camera not accessible")
@@ -372,39 +430,58 @@ def generate_camera_stream():
             break
         
         frame_count += 1
-        # Process every 2nd frame for performance
-        if frame_count % 2 != 0:
-            ret, buffer = cv.imencode(".jpg", frame)
-            yield (b"--frame\r\n"
-                   b"Content-Type: image/jpeg\r\n\r\n" + buffer.tobytes() + b"\r\n")
-            continue
         
+        # Calculate FPS
+        current_time = datetime.datetime.now()
+        time_diff = (current_time - last_time).total_seconds()
+        if time_diff > 0:
+            fps = 1.0 / time_diff
+            fps_queue.append(fps)
+        last_time = current_time
+        
+        avg_fps = np.mean(fps_queue) if fps_queue else 0
+        
+        # Process every frame for crowd detection
         try:
-            # Detect faces
+            # Detect ALL faces in frame (CROWD SUPPORT)
             face_objs = DeepFace.extract_faces(
                 img_path=frame,
-                detector_backend="opencv",
+                detector_backend="retinaface",  # Better for crowded scenes
                 enforce_detection=False,
-                align=False
+                align=True
             )
             
+            detection_stats['total_detections'] += len(face_objs)
+            detected_count = len(face_objs)
+            recognized_count = 0
+            unknown_count = 0
+            
+            # Process MULTIPLE faces simultaneously
             for face_obj in face_objs:
                 facial_area = face_obj["facial_area"]
                 x, y, w, h = facial_area["x"], facial_area["y"], facial_area["w"], facial_area["h"]
+                
+                # Ensure valid coordinates
+                x, y = max(0, x), max(0, y)
+                w, h = min(w, frame.shape[1]-x), min(h, frame.shape[0]-y)
+                
                 face = frame[y:y+h, x:x+w]
                 
                 if face.size == 0:
                     continue
                 
-                # Liveness detection
+                # Check for occlusion
+                is_occluded, occlusion_score = detect_occlusion(face)
+                
+                # Liveness detection (relaxed for occluded faces)
                 if not is_real_face(face):
-                    cv.putText(frame, "Fake Face!", (x, y-10),
-                              cv.FONT_HERSHEY_SIMPLEX, 0.7, (0, 0, 255), 2)
+                    cv.putText(frame, "Fake/Poor Quality", (x, y-10),
+                              cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
                     cv.rectangle(frame, (x, y), (x+w, y+h), (0, 0, 255), 2)
                     continue
                 
-                # Get embedding
-                embedding = get_face_embedding(face)
+                # Get embedding with occlusion handling
+                embedding = get_face_embedding(face, handle_occlusion=True)
                 if embedding is None:
                     continue
                 
@@ -412,6 +489,7 @@ def generate_camera_stream():
                 matched_name, confidence = search_face_faiss(embedding, threshold)
                 
                 if matched_name:
+                    recognized_count += 1
                     # Get person details from MongoDB
                     person = persons_col.find_one({"name": matched_name})
                     
@@ -420,20 +498,16 @@ def generate_camera_stream():
                         label = f"{matched_name} - BLOCKED"
                         color = (0, 0, 255)
                         cv.putText(frame, label, (x, y-10),
-                                  cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                        cv.rectangle(frame, (x, y), (x+w, y+h), color, 2)
-                        
-                        # Red overlay
-                        overlay = frame.copy()
-                        cv.rectangle(overlay, (x, y), (x+w, y+h), (0, 0, 255), -1)
-                        frame = cv.addWeighted(overlay, 0.3, frame, 0.7, 0)
+                                  cv.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                        cv.rectangle(frame, (x, y), (x+w, y+h), color, 3)
                         continue
                     
                     template_type = person.get("template_type", "Standard") if person else "Standard"
-                    update_count = person.get("update_count", 0) if person else 0
                     
                     label = f"{matched_name} ({confidence:.2f})"
-                    label2 = f"Updates: {update_count} | {template_type}"
+                    if is_occluded:
+                        label += " [Masked]"
+                    
                     color = (0, 255, 0)
                     
                     # Mark attendance with cooldown
@@ -447,39 +521,65 @@ def generate_camera_stream():
                             "timestamp": current_time.isoformat(),
                             "confidence": confidence,
                             "template_type": template_type,
-                            "continuous_learning_active": "true",
+                            "occluded": is_occluded,
+                            "occlusion_score": float(occlusion_score),
                             "method": "auto"
                         })
                         marked_attendance[matched_name] = current_time
-                        print(f"✓ Attendance marked for {matched_name} (Conf: {confidence:.3f})")
+                        print(f"✓ Attendance marked for {matched_name} (Conf: {confidence:.3f}, Occluded: {is_occluded})")
                     
                     # Draw on frame
-                    cv.putText(frame, label, (x, y-30),
-                              cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
-                    cv.putText(frame, label2, (x, y-10),
-                              cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 0), 1)
-                    cv.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+                    cv.putText(frame, label, (x, y-10),
+                              cv.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
+                    cv.rectangle(frame, (x, y), (x+w, y+h), color, 3)
+                    
+                    # Green corner markers for recognized
+                    cv.circle(frame, (x+5, y+5), 5, color, -1)
+                    cv.circle(frame, (x+w-5, y+5), 5, color, -1)
                 else:
+                    unknown_count += 1
                     # Unknown person
-                    label = "Unknown Person"
+                    label = "Unknown"
+                    if is_occluded:
+                        label += " [Masked]"
                     color = (0, 165, 255)
                     cv.putText(frame, label, (x, y-10),
-                              cv.FONT_HERSHEY_SIMPLEX, 0.7, color, 2)
+                              cv.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
                     cv.rectangle(frame, (x, y), (x+w, y+h), color, 2)
+                    
         except Exception as e:
             print(f"[Recognition Error] {e}")
         
-        # System info overlay
+        # Enhanced System Info Overlay
         total_faces = faiss_index.ntotal if faiss_index else 0
-        cv.putText(frame, f"FAISS Index: {total_faces} faces", (10, 30),
-                  cv.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
-        cv.putText(frame, "Continuous Learning: ACTIVE", (10, 60),
-                  cv.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
+        info_y = 30
+        
+        # Background panel for info
+        cv.rectangle(frame, (5, 5), (400, 140), (0, 0, 0), -1)
+        cv.rectangle(frame, (5, 5), (400, 140), (100, 100, 100), 2)
+        
+        cv.putText(frame, f"FAISS Index: {total_faces} faces", (10, info_y),
+                  cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        info_y += 25
+        cv.putText(frame, f"FPS: {avg_fps:.1f} | Detected: {detected_count}", (10, info_y),
+                  cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        info_y += 25
+        cv.putText(frame, f"Recognized: {recognized_count} | Unknown: {unknown_count}", (10, info_y),
+                  cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        info_y += 25
+        cv.putText(frame, "Continuous Learning: ACTIVE", (10, info_y),
+                  cv.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        info_y += 25
+        cv.putText(frame, "Crowd & Occlusion Support: ON", (10, info_y),
+                  cv.FONT_HERSHEY_SIMPLEX, 0.5, (255, 128, 0), 1)
         
         # Encode and yield frame
-        ret, buffer = cv.imencode(".jpg", frame)
+        ret, buffer = cv.imencode(".jpg", frame, [cv.IMWRITE_JPEG_QUALITY, 85])
         frame_bytes = buffer.tobytes()
         yield (b"--frame\r\n"
                b"Content-Type: image/jpeg\r\n\r\n" + frame_bytes + b"\r\n")
     
     cap.release()
+
+# Initialize on import
+initialize_faiss_index()
