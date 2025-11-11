@@ -3,247 +3,447 @@
 {% block title %}Manage Admins - Super Admin{% endblock %}
 
 {% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/superadmin_dashboard.css') }}">
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-    .sidebar { transition: transform 0.3s ease; }
-    @media (max-width: 768px) {
-        .sidebar.hidden-mobile { transform: translateX(-100%); }
-    }
-    .modal { display: none; }
-    .modal.active { display: flex; }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.mobile-open { transform: translateX(0) !important; }
+    .sa-overlay.active { display: block !important; opacity: 1 !important; }
+}
+.tab-btn {
+    padding: 0.75rem 1.5rem;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s;
+}
+.tab-btn.active {
+    border-bottom-color: #9333ea;
+    color: #9333ea;
+    font-weight: 600;
+}
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+}
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="flex h-screen bg-gray-100">
-    <div id="sidebar" class="sidebar fixed md:static w-64 bg-gradient-to-b from-purple-600 to-purple-900 text-white h-full z-50">
-        <div class="p-6 border-b border-purple-500">
-            <h1 class="text-2xl font-bold">Super Admin</h1>
+<div id="sidebarOverlay" class="sa-overlay"></div>
+
+<div class="dashboard-container">
+    <aside id="sidebar" class="sa-sidebar">
+        <div class="sa-sidebar-header">
+            <h1>Smart Attendance</h1>
+            <p class="text-sm opacity-80">Super Admin</p>
         </div>
         
-        <nav class="p-4">
-            <a href="/superadmin/dashboard" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-dashboard mr-3"></i> Dashboard
+        <nav class="sa-sidebar-nav">
+            <a href="/superadmin/dashboard" class="sa-nav-link">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
-            <a href="/superadmin/admins" class="flex items-center p-3 mb-2 bg-purple-700 rounded-lg">
-                <i class="fas fa-user-shield mr-3"></i> Manage Admins
+            <a href="/superadmin/cameras" class="sa-nav-link">
+                <i class="fas fa-video"></i> Camera Manager
             </a>
-            <a href="/superadmin/users" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-users mr-3"></i> All Users
+            <a href="/superadmin/admins" class="sa-nav-link active">
+                <i class="fas fa-user-shield"></i> Manage Admins
             </a>
-            <a href="/superadmin/logs" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-file-alt mr-3"></i> System Logs
+            <a href="/superadmin/users" class="sa-nav-link">
+                <i class="fas fa-users"></i> All Users
             </a>
-            <button onclick="logout()" class="w-full flex items-center p-3 mt-4 hover:bg-red-600 rounded-lg">
-                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            <a href="/superadmin/logs" class="sa-nav-link">
+                <i class="fas fa-clipboard-list"></i> System Logs
+            </a>
+            <button onclick="logout()" class="sa-logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
             </button>
         </nav>
-    </div>
+    </aside>
     
-    <div class="flex-1 overflow-auto">
-        <div class="bg-white shadow-sm p-4 flex justify-between items-center">
-            <button id="menuToggle" class="md:hidden text-gray-600">
-                <i class="fas fa-bars text-2xl"></i>
-            </button>
-            <h2 class="text-2xl font-bold text-gray-800">Manage Roles</h2>
-            <div class="flex gap-2">
-                <button onclick="filterRoles('all')" id="btn-all" class="filter-btn px-4 py-2 rounded-lg bg-purple-600 text-white">
-                    All Users
+    <main class="sa-main-content">
+        <div class="sa-topbar">
+            <div class="sa-topbar-left">
+                <button id="menuToggle" class="sa-menu-toggle">
+                    <i class="fas fa-bars"></i>
                 </button>
-                <button onclick="filterRoles('admin')" id="btn-admin" class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
-                    Admins Only
-                </button>
-                <button onclick="filterRoles('user')" id="btn-user" class="filter-btn px-4 py-2 rounded-lg bg-gray-200 text-gray-700">
-                    Users Only
-                </button>
+                <h2>Manage Admins</h2>
             </div>
+            <button onclick="openCreateModal()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2">
+                <i class="fas fa-plus"></i> Create Admin
+            </button>
         </div>
         
-        <div class="p-4 md:p-6">
-            <div class="bg-white rounded-lg shadow">
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="p-4 text-left">Name</th>
-                                <th class="p-4 text-left">Email</th>
-                                <th class="p-4 text-left hidden md:table-cell">Department</th>
-                                <th class="p-4 text-left">Role</th>
-                                <th class="p-4 text-left">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="usersTable" class="divide-y">
-                            <tr><td colspan="5" class="p-4 text-center">Loading...</td></tr>
-                        </tbody>
-                    </table>
+        <div class="sa-content">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Total Admins</p>
+                            <p id="totalAdmins" class="text-3xl font-bold text-purple-600">0</p>
+                        </div>
+                        <i class="fas fa-user-shield text-4xl text-purple-500"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Active Admins</p>
+                            <p id="activeAdmins" class="text-3xl font-bold text-green-600">0</p>
+                        </div>
+                        <i class="fas fa-check-circle text-4xl text-green-500"></i>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Blocked Admins</p>
+                            <p id="blockedAdmins" class="text-3xl font-bold text-red-600">0</p>
+                        </div>
+                        <i class="fas fa-ban text-4xl text-red-500"></i>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Tabs -->
+            <div class="bg-white rounded-lg shadow mb-6">
+                <div class="flex border-b">
+                    <button onclick="switchTab('active')" id="tab-active" class="tab-btn active">
+                        <i class="fas fa-check-circle mr-2"></i> Active Admins
+                    </button>
+                    <button onclick="switchTab('blocked')" id="tab-blocked" class="tab-btn">
+                        <i class="fas fa-ban mr-2"></i> Blocked Admins
+                    </button>
+                </div>
+                
+                <div class="p-4">
+                    <div id="activeAdminsContent">
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="p-4 text-left">Name</th>
+                                        <th class="p-4 text-left">Email</th>
+                                        <th class="p-4 text-left hidden md:table-cell">Department</th>
+                                        <th class="p-4 text-left hidden md:table-cell">Created</th>
+                                        <th class="p-4 text-left">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="activeAdminsTable" class="divide-y">
+                                    <tr><td colspan="5" class="p-4 text-center text-gray-500">Loading...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    
+                    <div id="blockedAdminsContent" class="hidden">
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="p-4 text-left">Name</th>
+                                        <th class="p-4 text-left">Email</th>
+                                        <th class="p-4 text-left hidden md:table-cell">Department</th>
+                                        <th class="p-4 text-left hidden md:table-cell">Blocked Date</th>
+                                        <th class="p-4 text-left">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="blockedAdminsTable" class="divide-y">
+                                    <tr><td colspan="5" class="p-4 text-center text-gray-500">No blocked admins</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
+    </main>
+</div>
+
+<!-- Create Admin Modal -->
+<div id="createModal" class="modal">
+    <div class="modal-content">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">Create New Admin</h3>
+            <button onclick="closeCreateModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+        <form id="createAdminForm" onsubmit="createAdmin(event)">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <input type="text" id="adminName" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                    <input type="email" id="adminEmail" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input type="password" id="adminPassword" required minlength="6" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Department (Optional)</label>
+                    <input type="text" id="adminDepartment" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                </div>
+                <div class="flex gap-2 pt-4">
+                    <button type="submit" class="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700">
+                        <i class="fas fa-plus mr-2"></i> Create Admin
+                    </button>
+                    <button type="button" onclick="closeCreateModal()" class="px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
 
-
 <script>
-let allUsers = [];
 let admins = [];
-let currentFilter = 'all';
+let currentTab = 'active';
 
 document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.getElementById('sidebar');
-    const menuToggle = document.getElementById('menuToggle');
-    
-    menuToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('hidden-mobile');
-    });
-    
-    loadAllData();
+    setupSidebarToggle();
+    loadAdmins();
 });
 
-async function loadAllData() {
-    try {
-        // Load both users and admins - use API endpoints
-        const [usersResp, adminsResp] = await Promise.all([
-            apiRequest('/api/superadmin/users'),
-            apiRequest('/api/superadmin/admins')
-        ]);
-        
-        if (!usersResp.ok || !adminsResp.ok) {
-            throw new Error('Failed to load data');
+function setupSidebarToggle() {
+    const sidebar = document.getElementById('sidebar');
+    const menuToggle = document.getElementById('menuToggle');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    menuToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('mobile-open');
+        overlay.classList.toggle('active');
+    });
+    
+    overlay.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+            closeCreateModal();
         }
+    });
+}
+
+async function loadAdmins() {
+    try {
+        const response = await fetch('/api/superadmin/admins');
+        if (!response.ok) throw new Error('Failed to load admins');
         
-        const usersData = await usersResp.json();
-        const adminsData = await adminsResp.json();
+        const data = await response.json();
+        admins = data.admins || [];
         
-        allUsers = usersData.users || [];
-        admins = adminsData.admins || [];
-        
-        displayUsers();
+        updateStats();
+        displayAdmins();
     } catch (error) {
-        console.error('Error loading data:', error);
-        showToast('Failed to load users', 'error');
+        console.error('Error loading admins:', error);
+        showToast('Failed to load admins', 'error');
     }
 }
 
-function displayUsers() {
-    const tbody = document.getElementById('usersTable');
+function updateStats() {
+    const activeCount = admins.filter(a => a.is_active).length;
+    const blockedCount = admins.filter(a => !a.is_active).length;
     
-    // Create combined list with role information
-    const combinedList = allUsers.map(user => {
-        const isAdmin = admins.find(a => a.email === user.email && a.is_active);
-        return {
-            ...user,
-            role: isAdmin ? 'admin' : 'user',
-            adminId: isAdmin ? isAdmin.id : null
-        };
-    });
-    
-    // Filter based on current filter
-    let filteredList = combinedList;
-    if (currentFilter === 'admin') {
-        filteredList = combinedList.filter(u => u.role === 'admin');
-    } else if (currentFilter === 'user') {
-        filteredList = combinedList.filter(u => u.role === 'user');
-    }
-    
-    if (filteredList.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No users found</td></tr>';
-        return;
-    }
-    
-    tbody.innerHTML = filteredList.map(user => `
-        <tr>
-            <td class="p-4">${user.name}</td>
-            <td class="p-4 text-sm">${user.email}</td>
-            <td class="p-4 hidden md:table-cell">${user.department || 'N/A'}</td>
-            <td class="p-4">
-                <span class="px-3 py-1 rounded-full text-xs font-semibold ${
-                    user.role === 'admin' 
-                        ? 'bg-purple-100 text-purple-800' 
-                        : 'bg-blue-100 text-blue-800'
-                }">
-                    ${user.role === 'admin' ? 'Admin' : 'User'}
-                </span>
-            </td>
-            <td class="p-4">
-                ${user.role === 'admin' 
-                    ? `<button onclick="demoteToUser(${user.adminId}, ${user.id})" class="px-3 py-1 bg-orange-500 text-white rounded text-sm hover:bg-orange-600">
-                        <i class="fas fa-arrow-down mr-1"></i> Demote to User
-                       </button>`
-                    : `<button onclick="promoteToAdmin(${user.id})" class="px-3 py-1 bg-green-500 text-white rounded text-sm hover:bg-green-600">
-                        <i class="fas fa-arrow-up mr-1"></i> Promote to Admin
-                       </button>`
-                }
-            </td>
-        </tr>
-    `).join('');
+    document.getElementById('totalAdmins').textContent = admins.length;
+    document.getElementById('activeAdmins').textContent = activeCount;
+    document.getElementById('blockedAdmins').textContent = blockedCount;
 }
 
-function filterRoles(filter) {
-    currentFilter = filter;
+function displayAdmins() {
+    const activeAdmins = admins.filter(a => a.is_active);
+    const blockedAdmins = admins.filter(a => !a.is_active);
     
-    // Update button styles
-    document.querySelectorAll('.filter-btn').forEach(btn => {
-        btn.classList.remove('bg-purple-600', 'text-white');
-        btn.classList.add('bg-gray-200', 'text-gray-700');
-    });
+    // Display active admins
+    const activeTable = document.getElementById('activeAdminsTable');
+    if (activeAdmins.length === 0) {
+        activeTable.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No active admins</td></tr>';
+    } else {
+        activeTable.innerHTML = activeAdmins.map(admin => `
+            <tr class="hover:bg-gray-50">
+                <td class="p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user-shield text-purple-600"></i>
+                        </div>
+                        <div class="font-medium">${admin.name}</div>
+                    </div>
+                </td>
+                <td class="p-4 text-sm">${admin.email}</td>
+                <td class="p-4 text-sm hidden md:table-cell">${admin.department || 'N/A'}</td>
+                <td class="p-4 text-sm hidden md:table-cell">${admin.created_at ? new Date(admin.created_at).toLocaleDateString() : 'N/A'}</td>
+                <td class="p-4">
+                    <button onclick="blockAdmin('${admin.id}')" class="text-red-600 hover:text-red-800 px-3 py-1 rounded hover:bg-red-50" title="Block Admin">
+                        <i class="fas fa-ban mr-1"></i> Block
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
     
-    const activeBtn = document.getElementById(`btn-${filter}`);
-    activeBtn.classList.remove('bg-gray-200', 'text-gray-700');
-    activeBtn.classList.add('bg-purple-600', 'text-white');
-    
-    displayUsers();
+    // Display blocked admins
+    const blockedTable = document.getElementById('blockedAdminsTable');
+    if (blockedAdmins.length === 0) {
+        blockedTable.innerHTML = '<tr><td colspan="5" class="p-4 text-center text-gray-500">No blocked admins</td></tr>';
+    } else {
+        blockedTable.innerHTML = blockedAdmins.map(admin => `
+            <tr class="hover:bg-gray-50 bg-red-50">
+                <td class="p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
+                            <i class="fas fa-user-slash text-red-600"></i>
+                        </div>
+                        <div class="font-medium text-gray-600">${admin.name}</div>
+                    </div>
+                </td>
+                <td class="p-4 text-sm text-gray-600">${admin.email}</td>
+                <td class="p-4 text-sm text-gray-600 hidden md:table-cell">${admin.department || 'N/A'}</td>
+                <td class="p-4 text-sm text-gray-600 hidden md:table-cell">${admin.updated_at ? new Date(admin.updated_at).toLocaleDateString() : 'N/A'}</td>
+                <td class="p-4">
+                    <button onclick="unblockAdmin('${admin.id}')" class="text-green-600 hover:text-green-800 px-3 py-1 rounded hover:bg-green-50" title="Unblock Admin">
+                        <i class="fas fa-check-circle mr-1"></i> Unblock
+                    </button>
+                </td>
+            </tr>
+        `).join('');
+    }
 }
 
-async function promoteToAdmin(userId) {
-    const user = allUsers.find(u => u.id === userId);
-    if (!user) return;
+function switchTab(tab) {
+    currentTab = tab;
     
-    if (!confirm(`Promote ${user.name} to Admin role?\n\nThey will have full administrative access.`)) {
-        return;
+    // Update tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    
+    // Show/hide content
+    if (tab === 'active') {
+        document.getElementById('activeAdminsContent').classList.remove('hidden');
+        document.getElementById('blockedAdminsContent').classList.add('hidden');
+    } else {
+        document.getElementById('activeAdminsContent').classList.add('hidden');
+        document.getElementById('blockedAdminsContent').classList.remove('hidden');
     }
+}
+
+function openCreateModal() {
+    document.getElementById('createModal').classList.add('active');
+    document.getElementById('createAdminForm').reset();
+}
+
+function closeCreateModal() {
+    document.getElementById('createModal').classList.remove('active');
+}
+
+async function createAdmin(event) {
+    event.preventDefault();
+    
+    const adminData = {
+        name: document.getElementById('adminName').value,
+        email: document.getElementById('adminEmail').value,
+        password: document.getElementById('adminPassword').value,
+        department: document.getElementById('adminDepartment').value || null
+    };
     
     try {
-        const response = await apiRequest(`/superadmin/users/${userId}/promote-to-admin`, {
-            method: 'POST'
+        const response = await fetch('/api/superadmin/create_admin', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(adminData)
         });
         
-        const result = await response.json();
+        const data = await response.json();
         
         if (response.ok) {
-            showToast(`${user.name} promoted to Admin!`, 'success');
-            loadAllData();
+            showToast('Admin created successfully!', 'success');
+            closeCreateModal();
+            loadAdmins();
         } else {
-            showToast(result.error || 'Failed to promote user', 'error');
+            showToast(data.error || 'Failed to create admin', 'error');
+        }
+    } catch (error) {
+        console.error('Error creating admin:', error);
+        showToast('Failed to create admin', 'error');
+    }
+}
+
+async function blockAdmin(adminId) {
+    const admin = admins.find(a => a.id == adminId);
+    if (!admin) return;
+    
+    if (!confirm(`Are you sure you want to block ${admin.name}?\n\nThey will lose administrative access immediately.`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/superadmin/delete_admin/${adminId}`, {
+            method: 'DELETE'
+        });
+        
+        if (response.ok) {
+            showToast('Admin blocked successfully', 'success');
+            loadAdmins();
+        } else {
+            const error = await response.json();
+            showToast(error.error || 'Failed to block admin', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Operation failed', 'error');
+        showToast('Failed to block admin', 'error');
     }
 }
 
-async function demoteToUser(adminId, userId) {
-    const user = allUsers.find(u => u.id === userId);
-    if (!user) return;
+async function unblockAdmin(adminId) {
+    const admin = admins.find(a => a.id == adminId);
+    if (!admin) return;
     
-    if (!confirm(`Demote ${user.name} back to User role?\n\nThey will lose administrative access.`)) {
+    if (!confirm(`Are you sure you want to unblock ${admin.name}?`)) {
         return;
     }
     
     try {
-        const response = await apiRequest(`/superadmin/admins/${adminId}/demote-to-user`, {
+        // Use a reactivate endpoint if available, or update the admin status
+        const response = await fetch(`/api/superadmin/admins/${adminId}/reactivate`, {
             method: 'POST'
         });
         
-        const result = await response.json();
-        
         if (response.ok) {
-            showToast(`${user.name} demoted to User!`, 'success');
-            loadAllData();
+            showToast('Admin unblocked successfully', 'success');
+            loadAdmins();
         } else {
-            showToast(result.error || 'Failed to demote admin', 'error');
+            showToast('Failed to unblock admin', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
-        showToast('Operation failed', 'error');
+        showToast('Failed to unblock admin', 'error');
     }
 }
 </script>

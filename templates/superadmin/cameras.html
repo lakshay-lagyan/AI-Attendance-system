@@ -3,637 +3,306 @@
 {% block title %}Camera Management - Super Admin{% endblock %}
 
 {% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/superadmin_dashboard.css') }}">
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-    /* Sidebar specific styles */
-    .sidebar {
-        background: linear-gradient(to bottom, #9333ea, #581c87);
-        color: white;
-    }
-    
-    .logo {
-        padding: 1.5rem;
-        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    }
-    
-    .logo h2 {
-        font-size: 1.5rem;
-        font-weight: 700;
-        margin: 0;
-    }
-    
-    .logo p {
-        margin: 0.25rem 0 0 0;
-        opacity: 0.8;
-        font-size: 0.875rem;
-    }
-    
-    .nav-menu {
-        padding: 1rem;
-    }
-    
-    .nav-item {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        margin-bottom: 0.5rem;
-        color: rgba(255, 255, 255, 0.9);
-        text-decoration: none;
-        border-radius: 0.5rem;
-        transition: all 200ms;
-    }
-    
-    .nav-item:hover {
-        background: rgba(255, 255, 255, 0.1);
-        color: white;
-    }
-    
-    .nav-item.active {
-        background: rgba(255, 255, 255, 0.15);
-        color: white;
-        font-weight: 600;
-    }
-    
-    .nav-item i {
-        margin-right: 0.75rem;
-        width: 1.25rem;
-    }
-    
-    .sidebar-footer {
-        padding: 1rem;
-        border-top: 1px solid rgba(255, 255, 255, 0.1);
-        margin-top: auto;
-    }
-    
-    .logout-btn {
-        display: flex;
-        align-items: center;
-        padding: 0.75rem 1rem;
-        width: 100%;
-        color: rgba(255, 255, 255, 0.9);
-        background: transparent;
-        border: none;
-        border-radius: 0.5rem;
-        cursor: pointer;
-        transition: all 200ms;
-        font-size: 1rem;
-    }
-    
-    .logout-btn:hover {
-        background: #dc2626;
-        color: white;
-    }
-    
-    .logout-btn i {
-        margin-right: 0.75rem;
-    }
-    
-    .sidebar-toggle {
-        display: none;
-        background: none;
-        border: none;
-        font-size: 1.5rem;
-        cursor: pointer;
-    }
-    
-    @media (max-width: 1024px) {
-        .sidebar {
-            position: fixed;
-            left: 0;
-            top: 0;
-            height: 100vh;
-            width: 16rem;
-            z-index: 50;
-            transform: translateX(-100%);
-            transition: transform 300ms;
-        }
-        
-        .sidebar.active {
-            transform: translateX(0);
-        }
-        
-        .sidebar-toggle {
-            display: block;
-        }
-        
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 40;
-        }
-        
-        .sidebar-overlay.active {
-            display: block;
-        }
-    }
-    
-    .camera-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
-        gap: 1.5rem;
-        margin-bottom: 2rem;
-    }
-    
-    .camera-card {
-        background: white;
-        border-radius: 12px;
-        overflow: hidden;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        position: relative;
-    }
-    
-    .camera-stream {
-        width: 100%;
-        height: 300px;
-        background: #000;
-        position: relative;
-        overflow: hidden;
-    }
-    
-    .camera-stream img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    
-    .camera-stream canvas {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-    }
-    
-    .camera-info {
-        padding: 1rem;
-    }
-    
-    .camera-header {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin-bottom: 0.75rem;
-    }
-    
-    .camera-name {
-        font-weight: 600;
-        font-size: 1.1rem;
-    }
-    
-    .health-indicator {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        padding: 0.25rem 0.75rem;
-        border-radius: 20px;
-        font-size: 0.875rem;
-        font-weight: 500;
-    }
-    
-    .health-healthy {
-        background: #d1fae5;
-        color: #065f46;
-    }
-    
-    .health-unhealthy {
-        background: #fee2e2;
-        color: #991b1b;
-    }
-    
-    .camera-stats {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 0.5rem;
-        margin-bottom: 1rem;
-        font-size: 0.875rem;
-    }
-    
-    .stat {
-        display: flex;
-        justify-content: space-between;
-    }
-    
-    .stat-label {
-        color: #6b7280;
-    }
-    
-    .stat-value {
-        font-weight: 600;
-    }
-    
-    .camera-actions {
-        display: flex;
-        gap: 0.5rem;
-        flex-wrap: wrap;
-    }
-    
-    .btn-camera {
-        padding: 0.5rem 1rem;
-        border-radius: 6px;
-        border: none;
-        font-size: 0.875rem;
-        font-weight: 500;
-        cursor: pointer;
-        transition: all 0.2s;
-    }
-    
-    .btn-start {
-        background: #10b981;
-        color: white;
-    }
-    
-    .btn-start:hover {
-        background: #059669;
-    }
-    
-    .btn-stop {
-        background: #ef4444;
-        color: white;
-    }
-    
-    .btn-stop:hover {
-        background: #dc2626;
-    }
-    
-    .btn-delete {
-        background: #6b7280;
-        color: white;
-    }
-    
-    .btn-delete:hover {
-        background: #4b5563;
-    }
-    
-    .add-camera-section {
-        background: white;
-        padding: 2rem;
-        border-radius: 12px;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin-bottom: 2rem;
-    }
-    
-    .form-row {
-        display: grid;
-        grid-template-columns: 2fr 1fr 1fr;
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-    
-    .form-group {
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .form-group label {
-        font-weight: 500;
-        margin-bottom: 0.5rem;
-        font-size: 0.875rem;
-        color: #374151;
-    }
-    
-    .form-group input,
-    .form-group select {
-        padding: 0.5rem;
-        border: 1px solid #d1d5db;
-        border-radius: 6px;
-        font-size: 0.875rem;
-    }
-    
-    .event-feed {
-        background: white;
-        border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        max-height: 500px;
-        overflow-y: auto;
-    }
-    
-    .event-item {
-        padding: 0.75rem;
-        border-left: 3px solid #3b82f6;
-        background: #f9fafb;
-        margin-bottom: 0.75rem;
-        border-radius: 0 6px 6px 0;
-    }
-    
-    .event-time {
-        font-size: 0.75rem;
-        color: #6b7280;
-        margin-bottom: 0.25rem;
-    }
-    
-    .event-message {
-        font-size: 0.875rem;
-        color: #1f2937;
-    }
-    
-    .event-confidence {
-        display: inline-block;
-        background: #dbeafe;
-        color: #1e40af;
-        padding: 0.125rem 0.5rem;
-        border-radius: 12px;
-        font-size: 0.75rem;
-        font-weight: 600;
-        margin-left: 0.5rem;
-    }
-    
-    .analytics-panel {
-        background: white;
-        border-radius: 12px;
-        padding: 1.5rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-        margin-bottom: 2rem;
-    }
-    
-    .analytics-grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-        gap: 1rem;
-    }
-    
-    .metric-card {
-        padding: 1rem;
-        background: #f9fafb;
-        border-radius: 8px;
-        text-align: center;
-    }
-    
-    .metric-value {
-        font-size: 2rem;
-        font-weight: 700;
-        color: #1f2937;
-        margin-bottom: 0.25rem;
-    }
-    
-    .metric-label {
-        font-size: 0.875rem;
-        color: #6b7280;
-    }
-    
-    .detection-overlay {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-    }
-    
-    .bounding-box {
-        position: absolute;
-        border: 2px solid #10b981;
-        box-shadow: 0 0 10px rgba(16, 185, 129, 0.5);
-    }
-    
-    .person-label {
-        position: absolute;
-        background: rgba(16, 185, 129, 0.9);
-        color: white;
-        padding: 0.25rem 0.5rem;
-        font-size: 0.75rem;
-        font-weight: 600;
-        border-radius: 4px;
-        white-space: nowrap;
-    }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.mobile-open { transform: translateX(0) !important; }
+    .sa-overlay.active { display: block !important; opacity: 1 !important; }
+}
+.camera-feed-container {
+    position: relative;
+    width: 100%;
+    padding-top: 56.25%; /* 16:9 aspect ratio */
+    background: #000;
+    border-radius: 8px;
+    overflow: hidden;
+}
+.camera-feed {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.status-badge {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    padding: 0.5rem 1rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+.status-online { background: #10b981; color: white; }
+.status-offline { background: #ef4444; color: white; }
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+}
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    max-width: 500px;
+    width: 90%;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="flex h-screen bg-gray-50">
-    <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <div class="logo">
-            <h2>Smart Attendance</h2>
-            <p>Super Admin</p>
+<div id="sidebarOverlay" class="sa-overlay"></div>
+
+<div class="dashboard-container">
+    <aside id="sidebar" class="sa-sidebar">
+        <div class="sa-sidebar-header">
+            <h1>Smart Attendance</h1>
+            <p class="text-sm opacity-80">Super Admin</p>
         </div>
-        <nav class="nav-menu">
-            <a href="/superadmin/dashboard" class="nav-item">
-                <i class="fas fa-tachometer-alt"></i>
-                <span>Dashboard</span>
+        
+        <nav class="sa-sidebar-nav">
+            <a href="/superadmin/dashboard" class="sa-nav-link">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
-            <a href="/superadmin/cameras" class="nav-item active">
-                <i class="fas fa-video"></i>
-                <span>Camera Manager</span>
+            <a href="/superadmin/cameras" class="sa-nav-link active">
+                <i class="fas fa-video"></i> Camera Manager
             </a>
-            <a href="/superadmin/admins" class="nav-item">
-                <i class="fas fa-user-shield"></i>
-                <span>Manage Admins</span>
+            <a href="/superadmin/admins" class="sa-nav-link">
+                <i class="fas fa-user-shield"></i> Manage Admins
             </a>
-            <a href="/superadmin/users" class="nav-item">
-                <i class="fas fa-users"></i>
-                <span>All Users</span>
+            <a href="/superadmin/users" class="sa-nav-link">
+                <i class="fas fa-users"></i> All Users
             </a>
-            <a href="/superadmin/logs" class="nav-item">
-                <i class="fas fa-clipboard-list"></i>
-                <span>System Logs</span>
+            <a href="/superadmin/logs" class="sa-nav-link">
+                <i class="fas fa-clipboard-list"></i> System Logs
             </a>
+            <button onclick="logout()" class="sa-logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </button>
         </nav>
-        <div class="sidebar-footer">
-            <button onclick="logout()" class="logout-btn">
-                <i class="fas fa-sign-out-alt"></i>
-                <span>Logout</span>
+    </aside>
+    
+    <main class="sa-main-content">
+        <div class="sa-topbar">
+            <div class="sa-topbar-left">
+                <button id="menuToggle" class="sa-menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h2>Camera Management</h2>
+            </div>
+            <button onclick="openAddCameraModal()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700 flex items-center gap-2">
+                <i class="fas fa-plus"></i> Add Camera
             </button>
         </div>
-    </aside>
-
-    <!-- Mobile overlay -->
-    <div class="sidebar-overlay" id="sidebarOverlay"></div>
-
-    <!-- Main Content -->
-    <div class="flex-1 overflow-auto">
-        <!-- Header -->
-        <header class="bg-white shadow-sm sticky top-0 z-10">
-            <div class="px-6 py-4 flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <button class="sidebar-toggle lg:hidden" id="sidebarToggle">
-                        <i class="fas fa-bars"></i>
-                    </button>
-                    <div>
-                        <h1 class="text-2xl font-bold text-gray-900">Camera Management</h1>
-                        <p class="text-sm text-gray-600">Real-time face detection & monitoring</p>
+        
+        <div class="sa-content">
+            <!-- Stats -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Total Cameras</p>
+                            <p id="totalCameras" class="text-3xl font-bold text-blue-600">0</p>
+                        </div>
+                        <i class="fas fa-video text-4xl text-blue-500"></i>
                     </div>
                 </div>
-                <div class="flex items-center gap-4">
-                    <button onclick="refreshCameras()" class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition">
-                        <i class="fas fa-sync-alt mr-2"></i> Refresh
-                    </button>
-                </div>
-            </div>
-        </header>
-
-        <div class="p-6">
-            <!-- Add Camera Section -->
-            <div class="add-camera-section">
-                <h2 class="text-xl font-bold mb-4">Add New Camera</h2>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Camera Source</label>
-                        <select id="sourceType" onchange="toggleSourceInput()">
-                            <option value="device">USB Device (Index)</option>
-                            <option value="url">IP/RTSP URL</option>
-                        </select>
-                    </div>
-                    <div class="form-group" id="deviceIndexGroup">
-                        <label>Device Index</label>
-                        <input type="number" id="deviceIndex" value="0" min="0" max="10">
-                    </div>
-                    <div class="form-group" id="urlGroup" style="display: none;">
-                        <label>Stream URL</label>
-                        <input type="text" id="streamUrl" placeholder="rtsp://192.168.1.100:554/stream">
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Active Cameras</p>
+                            <p id="activeCameras" class="text-3xl font-bold text-green-600">0</p>
+                        </div>
+                        <i class="fas fa-check-circle text-4xl text-green-500"></i>
                     </div>
                 </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label>Camera Name</label>
-                        <input type="text" id="cameraName" placeholder="e.g., Front Entrance">
-                    </div>
-                    <div class="form-group">
-                        <label>Resolution</label>
-                        <select id="resolution">
-                            <option value="640x480">640 x 480</option>
-                            <option value="1280x720" selected>1280 x 720 (HD)</option>
-                            <option value="1920x1080">1920 x 1080 (Full HD)</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label>FPS</label>
-                        <select id="fps">
-                            <option value="15">15 FPS</option>
-                            <option value="25">25 FPS</option>
-                            <option value="30" selected>30 FPS</option>
-                        </select>
-                    </div>
-                </div>
-                <button onclick="addCamera()" class="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition">
-                    <i class="fas fa-plus mr-2"></i> Add Camera
-                </button>
-            </div>
-
-            <!-- Analytics Panel -->
-            <div class="analytics-panel">
-                <h2 class="text-xl font-bold mb-4">Today's Analytics</h2>
-                <div class="analytics-grid">
-                    <div class="metric-card">
-                        <div class="metric-value" id="totalRecognitions">0</div>
-                        <div class="metric-label">Total Recognitions</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="uniquePersons">0</div>
-                        <div class="metric-label">Unique Persons</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="unknownDetections">0</div>
-                        <div class="metric-label">Unknown Detections</div>
-                    </div>
-                    <div class="metric-card">
-                        <div class="metric-value" id="activeCameras">0</div>
-                        <div class="metric-label">Active Cameras</div>
+                <div class="bg-white p-6 rounded-lg shadow">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Offline Cameras</p>
+                            <p id="offlineCameras" class="text-3xl font-bold text-red-600">0</p>
+                        </div>
+                        <i class="fas fa-times-circle text-4xl text-red-500"></i>
                     </div>
                 </div>
             </div>
-
-            <!-- Layout: Cameras + Event Feed -->
-            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 1.5rem;">
-                <!-- Camera Grid -->
-                <div>
-                    <h2 class="text-xl font-bold mb-4">Live Camera Feeds</h2>
-                    <div class="camera-grid" id="cameraGrid">
-                        <!-- Cameras will be loaded here -->
-                    </div>
-                </div>
-
-                <!-- Event Feed -->
-                <div>
-                    <h2 class="text-xl font-bold mb-4">Event Feed</h2>
-                    <div class="event-feed" id="eventFeed">
-                        <!-- Events will appear here -->
-                    </div>
+            
+            <!-- Cameras Grid -->
+            <div id="camerasGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="col-span-full text-center py-8">
+                    <i class="fas fa-video text-6xl text-gray-300 mb-4"></i>
+                    <p class="text-gray-500">Loading cameras...</p>
                 </div>
             </div>
         </div>
+    </main>
+</div>
+
+<!-- Add Camera Modal -->
+<div id="addCameraModal" class="modal">
+    <div class="modal-content">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">Add New Camera</h3>
+            <button onclick="closeAddCameraModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+        <form id="addCameraForm" onsubmit="addCamera(event)">
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Camera Name</label>
+                    <input type="text" id="cameraName" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="e.g., Main Entrance">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Camera Location</label>
+                    <input type="text" id="cameraLocation" required class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="e.g., Building A, Floor 1">
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Camera URL (Optional)</label>
+                    <input type="text" id="cameraUrl" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500" placeholder="http://192.168.1.100:8080/video">
+                    <p class="text-xs text-gray-500 mt-1">For external IP cameras (RTSP/HTTP stream)</p>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-1">Camera Type</label>
+                    <select id="cameraType" class="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                        <option value="0">Webcam (Index 0)</option>
+                        <option value="1">Webcam (Index 1)</option>
+                        <option value="external">External IP Camera</option>
+                    </select>
+                </div>
+                <div class="flex gap-2 pt-4">
+                    <button type="submit" class="flex-1 bg-purple-600 text-white py-2 rounded-lg hover:bg-purple-700">
+                        <i class="fas fa-plus mr-2"></i> Add Camera
+                    </button>
+                    <button type="button" onclick="closeAddCameraModal()" class="px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300">
+                        Cancel
+                    </button>
+                </div>
+            </div>
+        </form>
     </div>
 </div>
-{% endblock %}
 
-{% block extra_scripts %}
 <script>
 let cameras = [];
-let eventFeedData = [];
+
+document.addEventListener('DOMContentLoaded', () => {
+    setupSidebarToggle();
+    loadCameras();
+    // Auto-refresh every 10 seconds
+    setInterval(loadCameras, 10000);
+});
+
+function setupSidebarToggle() {
+    const sidebar = document.getElementById('sidebar');
+    const menuToggle = document.getElementById('menuToggle');
+    const overlay = document.getElementById('sidebarOverlay');
+    
+    menuToggle.addEventListener('click', () => {
+        sidebar.classList.toggle('mobile-open');
+        overlay.classList.toggle('active');
+    });
+    
+    overlay.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+    });
+    
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
+            closeAddCameraModal();
+        }
+    });
+}
 
 async function loadCameras() {
     try {
-        const response = await apiRequest('/cameras/cameras');
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        const data = await response.json();
+        const response = await fetch('/api/superadmin/cameras');
+        if (!response.ok) throw new Error('Failed to load cameras');
         
+        const data = await response.json();
         cameras = data.cameras || [];
-        renderCameras();
-        updateAnalytics();
+        
+        updateStats();
+        displayCameras();
     } catch (error) {
         console.error('Error loading cameras:', error);
         showToast('Failed to load cameras', 'error');
     }
 }
 
-function renderCameras() {
-    const grid = document.getElementById('cameraGrid');
+function updateStats() {
+    const activeCount = cameras.filter(c => c.is_active).length;
+    const offlineCount = cameras.filter(c => !c.is_active).length;
+    
+    document.getElementById('totalCameras').textContent = cameras.length;
+    document.getElementById('activeCameras').textContent = activeCount;
+    document.getElementById('offlineCameras').textContent = offlineCount;
+}
+
+function displayCameras() {
+    const grid = document.getElementById('camerasGrid');
     
     if (cameras.length === 0) {
-        grid.innerHTML = '<div class="col-span-full text-center py-12 text-gray-500">No cameras configured. Add a camera to get started.</div>';
+        grid.innerHTML = `
+            <div class="col-span-full text-center py-12">
+                <i class="fas fa-video-slash text-6xl text-gray-300 mb-4"></i>
+                <p class="text-gray-500 text-lg">No cameras added yet</p>
+                <button onclick="openAddCameraModal()" class="mt-4 bg-purple-600 text-white px-6 py-2 rounded-lg hover:bg-purple-700">
+                    <i class="fas fa-plus mr-2"></i> Add Your First Camera
+                </button>
+            </div>
+        `;
         return;
     }
     
-    grid.innerHTML = cameras.map(cam => `
-        <div class="camera-card" id="camera-${cam.id}">
-            <div class="camera-stream">
-                <img src="/api/cameras/cameras/${cam.id}/stream" 
-                     alt="Camera ${cam.id}" 
-                     onerror="this.src='/static/assets/camera-offline.png'"
-                     style="${cam.is_running ? '' : 'display:none'}">
-                <div class="detection-overlay" id="overlay-${cam.id}"></div>
-                ${!cam.is_running ? '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#6b7280;">Camera Offline</div>' : ''}
+    grid.innerHTML = cameras.map(camera => `
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="camera-feed-container">
+                ${camera.is_active ? 
+                    `<img src="/camera_feed/${camera.id}" class="camera-feed" alt="${camera.name}">` : 
+                    `<div class="camera-feed flex items-center justify-center bg-gray-800">
+                        <div class="text-center text-white">
+                            <i class="fas fa-video-slash text-5xl mb-3"></i>
+                            <p>Camera Offline</p>
+                        </div>
+                    </div>`
+                }
+                <span class="status-badge ${camera.is_active ? 'status-online' : 'status-offline'}">
+                    <i class="fas fa-circle mr-1"></i> ${camera.is_active ? 'LIVE' : 'OFFLINE'}
+                </span>
             </div>
-            <div class="camera-info">
-                <div class="camera-header">
-                    <div class="camera-name">${cam.config.name || 'Camera ' + cam.id}</div>
-                    <div class="health-indicator health-${cam.status}">
-                        <span>${cam.status === 'healthy' ? '🟢' : '🔴'}</span>
-                        ${cam.status}
-                    </div>
-                </div>
-                <div class="camera-stats">
-                    <div class="stat">
-                        <span class="stat-label">FPS:</span>
-                        <span class="stat-value">${cam.fps || 0}</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-label">Frames:</span>
-                        <span class="stat-value">${cam.total_frames || 0}</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-label">Source:</span>
-                        <span class="stat-value">${typeof cam.source === 'number' ? 'Device ' + cam.source : 'IP'}</span>
-                    </div>
-                    <div class="stat">
-                        <span class="stat-label">Resolution:</span>
-                        <span class="stat-value">${cam.config.width}x${cam.config.height}</span>
-                    </div>
-                </div>
-                <div class="camera-actions">
-                    ${!cam.is_running ? 
-                        `<button class="btn-camera btn-start" onclick="startCamera(${cam.id})">
-                            <i class="fas fa-play mr-1"></i> Start
-                        </button>` :
-                        `<button class="btn-camera btn-stop" onclick="stopCamera(${cam.id})">
+            <div class="p-4">
+                <h3 class="text-lg font-bold text-gray-900">${camera.name}</h3>
+                <p class="text-sm text-gray-600 mb-3">
+                    <i class="fas fa-map-marker-alt mr-1"></i> ${camera.location}
+                </p>
+                <div class="flex gap-2">
+                    ${camera.is_active ? 
+                        `<button onclick="stopCamera('${camera.id}')" class="flex-1 bg-red-500 text-white py-2 rounded-lg hover:bg-red-600 text-sm">
                             <i class="fas fa-stop mr-1"></i> Stop
+                        </button>` : 
+                        `<button onclick="startCamera('${camera.id}')" class="flex-1 bg-green-500 text-white py-2 rounded-lg hover:bg-green-600 text-sm">
+                            <i class="fas fa-play mr-1"></i> Start
                         </button>`
                     }
-                    <button class="btn-camera btn-delete" onclick="deleteCamera(${cam.id})">
-                        <i class="fas fa-trash mr-1"></i> Delete
+                    <button onclick="deleteCamera('${camera.id}')" class="px-4 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 text-sm">
+                        <i class="fas fa-trash"></i>
                     </button>
                 </div>
             </div>
@@ -641,97 +310,82 @@ function renderCameras() {
     `).join('');
 }
 
-function toggleSourceInput() {
-    const sourceType = document.getElementById('sourceType').value;
-    document.getElementById('deviceIndexGroup').style.display = sourceType === 'device' ? 'block' : 'none';
-    document.getElementById('urlGroup').style.display = sourceType === 'url' ? 'block' : 'none';
+function openAddCameraModal() {
+    document.getElementById('addCameraModal').classList.add('active');
+    document.getElementById('addCameraForm').reset();
 }
 
-async function addCamera() {
+function closeAddCameraModal() {
+    document.getElementById('addCameraModal').classList.remove('active');
+}
+
+async function addCamera(event) {
+    event.preventDefault();
+    
+    const cameraType = document.getElementById('cameraType').value;
+    const cameraData = {
+        name: document.getElementById('cameraName').value,
+        location: document.getElementById('cameraLocation').value,
+        camera_index: cameraType === 'external' ? null : parseInt(cameraType),
+        stream_url: cameraType === 'external' ? document.getElementById('cameraUrl').value : null
+    };
+    
     try {
-        const sourceType = document.getElementById('sourceType').value;
-        const name = document.getElementById('cameraName').value || 'New Camera';
-        const resolution = document.getElementById('resolution').value.split('x');
-        const fps = parseInt(document.getElementById('fps').value);
-        
-        let source;
-        if (sourceType === 'device') {
-            source = parseInt(document.getElementById('deviceIndex').value);
-        } else {
-            source = document.getElementById('streamUrl').value;
-            if (!source) {
-                showToast('Please enter stream URL', 'error');
-                return;
-            }
-        }
-        
-        const response = await apiRequest('/cameras/cameras', {
+        const response = await fetch('/api/superadmin/cameras', {
             method: 'POST',
-            body: JSON.stringify({
-                source: source,
-                config: {
-                    name: name,
-                    width: parseInt(resolution[0]),
-                    height: parseInt(resolution[1]),
-                    fps: fps,
-                    enabled: true
-                }
-            })
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(cameraData)
         });
         
         const data = await response.json();
         
         if (response.ok) {
-            showToast('Camera added successfully', 'success');
-            
-            // Auto-start the camera
-            await startCamera(data.camera_id);
-            
-            // Reload cameras
-            await loadCameras();
-            
-            // Clear form
-            document.getElementById('cameraName').value = '';
-            document.getElementById('streamUrl').value = '';
+            showToast('Camera added successfully!', 'success');
+            closeAddCameraModal();
+            loadCameras();
         } else {
             showToast(data.error || 'Failed to add camera', 'error');
         }
     } catch (error) {
         console.error('Error adding camera:', error);
-        showToast('Error adding camera', 'error');
+        showToast('Failed to add camera', 'error');
     }
 }
 
 async function startCamera(cameraId) {
     try {
-        const response = await apiRequest(`/cameras/cameras/${cameraId}/start`, {
+        const response = await fetch(`/api/superadmin/cameras/${cameraId}/start`, {
             method: 'POST'
         });
         
         if (response.ok) {
-            showToast('Camera started', 'success');
-            addEvent(`Camera ${cameraId} started`, 'system');
-            setTimeout(() => loadCameras(), 1000);
+            showToast('Camera started successfully', 'success');
+            setTimeout(loadCameras, 1000);
+        } else {
+            const error = await response.json();
+            showToast(error.error || 'Failed to start camera', 'error');
         }
     } catch (error) {
-        console.error('Error starting camera:', error);
+        console.error('Error:', error);
         showToast('Failed to start camera', 'error');
     }
 }
 
 async function stopCamera(cameraId) {
     try {
-        const response = await apiRequest(`/cameras/cameras/${cameraId}/stop`, {
+        const response = await fetch(`/api/superadmin/cameras/${cameraId}/stop`, {
             method: 'POST'
         });
         
         if (response.ok) {
-            showToast('Camera stopped', 'success');
-            addEvent(`Camera ${cameraId} stopped`, 'system');
-            setTimeout(() => loadCameras(), 500);
+            showToast('Camera stopped successfully', 'success');
+            loadCameras();
+        } else {
+            const error = await response.json();
+            showToast(error.error || 'Failed to stop camera', 'error');
         }
     } catch (error) {
-        console.error('Error stopping camera:', error);
+        console.error('Error:', error);
         showToast('Failed to stop camera', 'error');
     }
 }
@@ -740,76 +394,21 @@ async function deleteCamera(cameraId) {
     if (!confirm('Are you sure you want to delete this camera?')) return;
     
     try {
-        const response = await apiRequest(`/cameras/cameras/${cameraId}`, {
+        const response = await fetch(`/api/superadmin/cameras/${cameraId}`, {
             method: 'DELETE'
         });
         
         if (response.ok) {
-            showToast('Camera deleted', 'success');
+            showToast('Camera deleted successfully', 'success');
             loadCameras();
+        } else {
+            const error = await response.json();
+            showToast(error.error || 'Failed to delete camera', 'error');
         }
     } catch (error) {
-        console.error('Error deleting camera:', error);
+        console.error('Error:', error);
         showToast('Failed to delete camera', 'error');
     }
 }
-
-function addEvent(message, type = 'recognition', confidence = null) {
-    const event = {
-        time: new Date().toLocaleTimeString(),
-        message: message,
-        type: type,
-        confidence: confidence
-    };
-    
-    eventFeedData.unshift(event);
-    if (eventFeedData.length > 50) eventFeedData.pop();
-    
-    renderEventFeed();
-}
-
-function renderEventFeed() {
-    const feed = document.getElementById('eventFeed');
-    
-    if (eventFeedData.length === 0) {
-        feed.innerHTML = '<div class="text-center text-gray-500 py-8">No events yet</div>';
-        return;
-    }
-    
-    feed.innerHTML = eventFeedData.map(event => `
-        <div class="event-item">
-            <div class="event-time">${event.time}</div>
-            <div class="event-message">
-                ${event.message}
-                ${event.confidence ? `<span class="event-confidence">${event.confidence}%</span>` : ''}
-            </div>
-        </div>
-    `).join('');
-}
-
-function updateAnalytics() {
-    document.getElementById('activeCameras').textContent = cameras.filter(c => c.is_running).length;
-    // Other analytics would be updated from recognition events
-}
-
-function refreshCameras() {
-    loadCameras();
-    showToast('Refreshed', 'success');
-}
-
-// Sidebar toggle
-document.getElementById('sidebarToggle')?.addEventListener('click', () => {
-    document.getElementById('sidebar').classList.toggle('active');
-    document.getElementById('sidebarOverlay').classList.toggle('active');
-});
-
-document.getElementById('sidebarOverlay')?.addEventListener('click', () => {
-    document.getElementById('sidebar').classList.remove('active');
-    document.getElementById('sidebarOverlay').classList.remove('active');
-});
-
-// Initialize
-loadCameras();
-setInterval(loadCameras, 10000); // Refresh every 10 seconds
 </script>
 {% endblock %}

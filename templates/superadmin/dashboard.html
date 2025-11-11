@@ -121,9 +121,35 @@
                 </div>
             </div>
             
+            <!-- Live Attendance Camera Feed -->
+            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-xl font-bold flex items-center">
+                        <span class="live-dot"></span>
+                        <i class="fas fa-camera mr-2 text-purple-600"></i>
+                        Live Attendance Camera
+                    </h3>
+                    <button id="toggleCamera" onclick="toggleCameraFeed()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
+                        <i class="fas fa-play mr-2"></i> Start Camera
+                    </button>
+                </div>
+                <div class="relative">
+                    <div id="cameraPlaceholder" class="flex items-center justify-center bg-gray-800 rounded-lg" style="height: 400px;">
+                        <div class="text-center text-white">
+                            <i class="fas fa-video text-6xl mb-4 opacity-50"></i>
+                            <p class="text-lg">Click "Start Camera" to begin live attendance monitoring</p>
+                        </div>
+                    </div>
+                    <img id="videoFeed" src="" class="hidden w-full rounded-lg" style="max-height: 400px; object-fit: contain;">
+                    <div id="attendanceOverlay" class="absolute top-4 right-4 bg-black bg-opacity-75 text-white px-4 py-2 rounded-lg hidden">
+                        <p class="text-sm"><i class="fas fa-users mr-2"></i>Watching for attendance...</p>
+                    </div>
+                </div>
+            </div>
+            
             <!-- Real-time Monitoring Section -->
             <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <!-- Camera Feed Monitor -->
+                <!-- Recent Attendance -->
                 <div class="bg-white rounded-lg shadow-lg p-6">
                     <div class="flex items-center justify-between mb-4">
                         <h3 class="text-xl font-bold flex items-center">
@@ -578,16 +604,37 @@ async function loadLogs() {
     }
 }
 
-async function startCameraFeed() {
-    showToast('Camera feed is managed in Camera Manager page', 'info');
-}
+let cameraFeedActive = false;
 
-function stopCameraFeed() {
-    showToast('Use Camera Manager page for camera controls', 'info');
-}
-
-function refreshCameraFeed() {
-    showToast('Use Camera Manager page for camera controls', 'info');
+function toggleCameraFeed() {
+    const videoFeed = document.getElementById('videoFeed');
+    const placeholder = document.getElementById('cameraPlaceholder');
+    const overlay = document.getElementById('attendanceOverlay');
+    const toggleBtn = document.getElementById('toggleCamera');
+    
+    if (!cameraFeedActive) {
+        // Start camera feed
+        videoFeed.src = '/video_feed';
+        videoFeed.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        overlay.classList.remove('hidden');
+        toggleBtn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Camera';
+        toggleBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
+        toggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
+        cameraFeedActive = true;
+        showToast('Camera feed started - Attendance monitoring active', 'success');
+    } else {
+        // Stop camera feed
+        videoFeed.src = '';
+        videoFeed.classList.add('hidden');
+        placeholder.classList.remove('hidden');
+        overlay.classList.add('hidden');
+        toggleBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Start Camera';
+        toggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
+        toggleBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
+        cameraFeedActive = false;
+        showToast('Camera feed stopped', 'info');
+    }
 }
 
 // Cleanup on page unload

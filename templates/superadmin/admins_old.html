@@ -100,17 +100,21 @@ document.addEventListener('DOMContentLoaded', () => {
 
 async function loadAllData() {
     try {
-        // Load both users and admins
+        // Load both users and admins - use API endpoints
         const [usersResp, adminsResp] = await Promise.all([
-            apiRequest('/superadmin/users'),
-            apiRequest('/superadmin/admins')
+            apiRequest('/api/superadmin/users'),
+            apiRequest('/api/superadmin/admins')
         ]);
+        
+        if (!usersResp.ok || !adminsResp.ok) {
+            throw new Error('Failed to load data');
+        }
         
         const usersData = await usersResp.json();
         const adminsData = await adminsResp.json();
         
-        if (usersResp.ok) allUsers = usersData.users;
-        if (adminsResp.ok) admins = adminsData.admins;
+        allUsers = usersData.users || [];
+        admins = adminsData.admins || [];
         
         displayUsers();
     } catch (error) {

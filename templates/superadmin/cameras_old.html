@@ -2,10 +2,6 @@
 
 {% block title %}Camera Management - Super Admin{% endblock %}
 
-{% block extra_head %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/sidebar.css') }}">
-{% endblock %}
-
 {% block extra_styles %}
 <style>
     /* Sidebar specific styles */
@@ -423,7 +419,7 @@
             </a>
             <a href="/superadmin/admins" class="nav-item">
                 <i class="fas fa-user-shield"></i>
-                <span>Manage Admins</span>
+                <span>Manage Roles</span>
             </a>
             <a href="/superadmin/users" class="nav-item">
                 <i class="fas fa-users"></i>
@@ -569,6 +565,9 @@ let eventFeedData = [];
 async function loadCameras() {
     try {
         const response = await apiRequest('/cameras/cameras');
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
+        }
         const data = await response.json();
         
         cameras = data.cameras || [];

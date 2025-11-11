@@ -3,46 +3,87 @@
 {% block title %}All Users - Super Admin{% endblock %}
 
 {% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/superadmin_dashboard.css') }}">
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-    .sidebar { transition: transform 0.3s ease; }
-    @media (max-width: 768px) {
-        .sidebar.hidden-mobile { transform: translateX(-100%); }
-    }
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.mobile-open { transform: translateX(0) !important; }
+    .sa-overlay.active { display: block !important; opacity: 1 !important; }
+}
+.user-photo {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+.modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.7);
+}
+.modal.active {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background: white;
+    padding: 2rem;
+    border-radius: 1rem;
+    max-width: 600px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="flex h-screen bg-gray-100">
-    <div id="sidebar" class="sidebar fixed md:static w-64 bg-gradient-to-b from-purple-600 to-purple-900 text-white h-full z-50">
-        <div class="p-6 border-b border-purple-500">
-            <h1 class="text-2xl font-bold">Super Admin</h1>
+<div id="sidebarOverlay" class="sa-overlay"></div>
+
+<div class="dashboard-container">
+    <aside id="sidebar" class="sa-sidebar">
+        <div class="sa-sidebar-header">
+            <h1>Smart Attendance</h1>
+            <p class="text-sm opacity-80">Super Admin</p>
         </div>
         
-        <nav class="p-4">
-            <a href="/superadmin/dashboard" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-dashboard mr-3"></i> Dashboard
+        <nav class="sa-sidebar-nav">
+            <a href="/superadmin/dashboard" class="sa-nav-link">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
-            <a href="/superadmin/admins" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-user-shield mr-3"></i> Manage People
+            <a href="/superadmin/cameras" class="sa-nav-link">
+                <i class="fas fa-video"></i> Camera Manager
             </a>
-            <a href="/superadmin/users" class="flex items-center p-3 mb-2 bg-purple-700 rounded-lg">
-                <i class="fas fa-users mr-3"></i> All Users
+            <a href="/superadmin/admins" class="sa-nav-link">
+                <i class="fas fa-user-shield"></i> Manage Admins
             </a>
-            <a href="/superadmin/logs" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-file-alt mr-3"></i> System Logs
+            <a href="/superadmin/users" class="sa-nav-link active">
+                <i class="fas fa-users"></i> All Users
             </a>
-            <button onclick="logout()" class="w-full flex items-center p-3 mt-4 hover:bg-red-600 rounded-lg">
-                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            <a href="/superadmin/logs" class="sa-nav-link">
+                <i class="fas fa-clipboard-list"></i> System Logs
+            </a>
+            <button onclick="logout()" class="sa-logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
             </button>
         </nav>
-    </div>
+    </aside>
     
-    <div class="flex-1 overflow-auto">
-        <div class="bg-white shadow-sm p-4 flex justify-between items-center">
-            <button id="menuToggle" class="md:hidden text-gray-600">
-                <i class="fas fa-bars text-2xl"></i>
-            </button>
-            <h2 class="text-2xl font-bold text-gray-800">All Users</h2>
+    <main class="sa-main-content">
+        <div class="sa-topbar">
+            <div class="sa-topbar-left">
+                <button id="menuToggle" class="sa-menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h2>All Users</h2>
+            </div>
             <div class="flex gap-2">
                 <input type="text" id="searchInput" placeholder="Search users..." class="px-3 py-2 border rounded-lg">
                 <button onclick="loadUsers()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
@@ -110,6 +151,19 @@
                 </div>
             </div>
         </div>
+    </main>
+</div>
+
+<!-- User Details Modal -->
+<div id="userModal" class="modal">
+    <div class="modal-content">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-2xl font-bold text-gray-900">User Details</h3>
+            <button onclick="closeModal()" class="text-gray-500 hover:text-gray-700">
+                <i class="fas fa-times text-2xl"></i>
+            </button>
+        </div>
+        <div id="modalBody"></div>
     </div>
 </div>
 
@@ -162,17 +216,25 @@ function displayUsers(usersList) {
     tbody.innerHTML = usersList.map(user => `
         <tr class="hover:bg-gray-50">
             <td class="p-4">
-                <div class="flex items-center">
-                    <div class="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center mr-3">
-                        <i class="fas fa-user text-purple-600"></i>
-                    </div>
+                <div class="flex items-center gap-3">
+                    ${user.photo_path ? 
+                        `<img src="/static/photos/${user.photo_path}" class="user-photo" alt="${user.name}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2248%22 height=%2248%22%3E%3Crect fill=%22%239333ea%22 width=%2248%22 height=%2248%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 font-size=%2220%22 fill=%22white%22%3E${user.name.charAt(0).toUpperCase()}%3C/text%3E%3C/svg%3E'">` : 
+                        `<div class="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center">
+                            <span class="text-purple-600 font-bold text-lg">${user.name.charAt(0).toUpperCase()}</span>
+                        </div>`
+                    }
                     <div>
-                        <div class="font-medium">${user.name}</div>
+                        <div class="font-medium text-gray-900">${user.name}</div>
+                        <div class="text-sm text-gray-500">${user.phone || 'No phone'}</div>
                     </div>
                 </div>
             </td>
-            <td class="p-4">${user.email}</td>
-            <td class="p-4 hidden md:table-cell">${user.department || 'N/A'}</td>
+            <td class="p-4">
+                <div class="text-sm">${user.email}</div>
+            </td>
+            <td class="p-4 hidden md:table-cell">
+                <div class="text-sm">${user.department || 'N/A'}</div>
+            </td>
             <td class="p-4">
                 <div class="flex flex-col gap-1">
                     <span class="px-2 py-1 rounded text-xs font-medium ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -182,12 +244,14 @@ function displayUsers(usersList) {
                 </div>
             </td>
             <td class="p-4">
-                <button onclick="toggleUserStatus(${user.id})" class="text-blue-600 hover:text-blue-800 mr-2" title="${user.is_active ? 'Deactivate' : 'Activate'}">
-                    <i class="fas fa-${user.is_active ? 'ban' : 'check-circle'}"></i>
-                </button>
-                <button onclick="viewUser(${user.id})" class="text-green-600 hover:text-green-800" title="View Details">
-                    <i class="fas fa-eye"></i>
-                </button>
+                <div class="flex gap-2">
+                    <button onclick="viewUserDetails('${user.id}')" class="text-blue-600 hover:text-blue-800" title="View Details">
+                        <i class="fas fa-eye"></i>
+                    </button>
+                    <button onclick="toggleUserStatus('${user.id}')" class="text-${user.is_active ? 'red' : 'green'}-600 hover:text-${user.is_active ? 'red' : 'green'}-800" title="${user.is_active ? 'Block' : 'Activate'}">
+                        <i class="fas fa-${user.is_active ? 'ban' : 'check-circle'}"></i>
+                    </button>
+                </div>
             </td>
         </tr>
     `).join('');
@@ -204,22 +268,26 @@ function filterUsers() {
 }
 
 async function toggleUserStatus(id) {
-    const user = users.find(u => u.id === id);
+    const user = users.find(u => u.id == id);
     if (!user) return;
     
-    if (!confirm(`Are you sure you want to ${user.is_active ? 'deactivate' : 'activate'} this user?`)) return;
+    const action = user.is_active ? 'block' : 'unblock';
+    if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
     
     try {
-        const response = await apiRequest(`/api/superadmin/users/${id}`, {
-            method: 'PUT',
-            body: JSON.stringify({ is_active: !user.is_active })
+        const endpoint = user.is_active ? `/api/block_user` : `/api/unblock_user`;
+        const response = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ user_id: id })
         });
         
         if (response.ok) {
-            showToast(`User ${user.is_active ? 'deactivated' : 'activated'}`, 'success');
+            showToast(`User ${action}ed successfully`, 'success');
             loadUsers();
         } else {
-            showToast('Operation failed', 'error');
+            const error = await response.json();
+            showToast(error.error || 'Operation failed', 'error');
         }
     } catch (error) {
         console.error('Error:', error);
@@ -227,11 +295,99 @@ async function toggleUserStatus(id) {
     }
 }
 
-function viewUser(id) {
-    const user = users.find(u => u.id === id);
+function viewUserDetails(id) {
+    const user = users.find(u => u.id == id);
     if (!user) return;
     
-    alert(`User Details:\n\nName: ${user.name}\nEmail: ${user.email}\nDepartment: ${user.department || 'N/A'}\nPhone: ${user.phone || 'N/A'}\nStatus: ${user.is_active ? 'Active' : 'Inactive'}\nEnrolled: ${user.is_enrolled ? 'Yes' : 'No'}`);
+    const modalBody = document.getElementById('modalBody');
+    modalBody.innerHTML = `
+        <div class="space-y-4">
+            <div class="flex justify-center mb-6">
+                ${user.photo_path ? 
+                    `<img src="/static/photos/${user.photo_path}" class="w-32 h-32 rounded-full object-cover border-4 border-purple-200" alt="${user.name}">` : 
+                    `<div class="w-32 h-32 bg-purple-200 rounded-full flex items-center justify-center">
+                        <span class="text-purple-600 font-bold text-5xl">${user.name.charAt(0).toUpperCase()}</span>
+                    </div>`
+                }
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <p class="text-sm text-gray-500">Name</p>
+                    <p class="font-semibold">${user.name}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Email</p>
+                    <p class="font-semibold">${user.email}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Phone</p>
+                    <p class="font-semibold">${user.phone || 'N/A'}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Department</p>
+                    <p class="font-semibold">${user.department || 'N/A'}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Status</p>
+                    <p class="font-semibold">
+                        <span class="px-3 py-1 rounded-full text-sm ${user.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                            ${user.is_active ? 'Active' : 'Blocked'}
+                        </span>
+                    </p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Enrollment</p>
+                    <p class="font-semibold">
+                        <span class="px-3 py-1 rounded-full text-sm ${user.is_enrolled ? 'bg-purple-100 text-purple-800' : 'bg-yellow-100 text-yellow-800'}">
+                            ${user.is_enrolled ? 'Enrolled' : 'Pending'}
+                        </span>
+                    </p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">User ID</p>
+                    <p class="font-semibold">${user.id}</p>
+                </div>
+                <div>
+                    <p class="text-sm text-gray-500">Created</p>
+                    <p class="font-semibold">${user.created_at ? new Date(user.created_at).toLocaleDateString() : 'N/A'}</p>
+                </div>
+            </div>
+            ${user.address ? `
+                <div>
+                    <p class="text-sm text-gray-500">Address</p>
+                    <p class="font-semibold">${user.address}</p>
+                </div>
+            ` : ''}
+        </div>
+    `;
+    document.getElementById('userModal').classList.add('active');
 }
+
+function closeModal() {
+    document.getElementById('userModal').classList.remove('active');
+}
+
+// Sidebar Toggle
+const sidebar = document.getElementById('sidebar');
+const menuToggle = document.getElementById('menuToggle');
+const overlay = document.getElementById('sidebarOverlay');
+
+menuToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('mobile-open');
+    overlay.classList.toggle('active');
+});
+
+overlay.addEventListener('click', () => {
+    sidebar.classList.remove('mobile-open');
+    overlay.classList.remove('active');
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+        closeModal();
+    }
+});
 </script>
 {% endblock %}
