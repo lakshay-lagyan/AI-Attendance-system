@@ -4,191 +4,119 @@
 
 {% block extra_head %}
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script src="https://cdn.tailwindcss.com"></script>
 {% endblock %}
 
 {% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/superadmin_dashboard.css') }}">
 <style>
-/* Root + sizing */
-.dashboard-root { --sidebar-width: 260px; --sidebar-compact: 72px; --sidebar-transition: 360ms cubic-bezier(.2,.9,.2,1); perspective:1200px; }
-
-/* Sidebar base */
-.sidebar {
-  width: var(--sidebar-width);
-  height: 100vh;
-  transform-origin: left center;
-  transition: transform var(--sidebar-transition), width 220ms ease, box-shadow 220ms ease;
-  z-index: 50;
-  position: fixed; left: 0; top: 0; overflow-y: auto; -webkit-overflow-scrolling: touch;
-  will-change: transform, box-shadow;
-}
-
-/* Desktop static/flow override */
-@media (min-width: 768px) {
-  .sidebar { position: sticky; top: 0; }
-}
-
-/* Mobile closed state (off-canvas) */
-.sidebar.closed {
-  transform: translateX(-110%) rotateY(-10deg) scale(0.98);
-  box-shadow: none;
-}
-
-/* Mobile open state (overlay) */
-.sidebar.open {
-  transform: translateX(0) rotateY(0) scale(1);
-  box-shadow: 0 30px 90px rgba(3,7,18,0.45);
-}
-
-/* Desktop compact (icons only) */
-.sidebar.compact { width: var(--sidebar-compact); transform: translateX(0) rotateY(-6deg) translateZ(6px); }
-.sidebar.compact .nav-label { display: none; }
-.sidebar.compact .nav-icon { width: 40px; text-align:center; margin-right:0; }
-
-/* Backdrop for mobile overlay */
-.sidebar-backdrop {
-  position: fixed; inset: 0; background: rgba(2,6,23,0.45);
-  opacity: 0; visibility: hidden; transition: opacity 240ms ease, visibility 240ms;
-  z-index: 45;
-}
-.sidebar-backdrop.visible { opacity: 1; visibility: visible; }
-
-/* Content push when sidebar open on desktop */
-.content-area { transition: margin-left var(--sidebar-transition), padding var(--sidebar-transition); }
-@media (min-width: 1024px) {
-  .content-area.sidebar-open-desktop { margin-left: var(--sidebar-width); }
-  .content-area.sidebar-compact-desktop { margin-left: var(--sidebar-compact); }
-}
-
-/* Nav item polish */
-.sidebar .nav-link { display:flex; align-items:center; gap:.75rem; padding:.7rem 1rem; border-radius:8px; transition: background 160ms, transform 160ms; }
-.sidebar .nav-link:hover { transform: translateX(6px); background: rgba(255,255,255,0.04); }
-.sidebar .nav-icon { width:28px; display:inline-flex; justify-content:center; }
-
-/* Stat card hover */
-.stat-card { transition: transform 180ms ease, box-shadow 180ms ease; }
-.stat-card:hover { transform: translateY(-6px); box-shadow: 0 18px 40px rgba(7,11,30,0.06); }
-
-/* Grid responsive tweaks */
-@media (min-width: 1024px) {
-  .grid-lg-2 { grid-template-columns: repeat(2, minmax(0,1fr)); }
-}
-@media (max-width: 767px) {
-  .sidebar { width: 86%; max-width: 320px; }
-  .sidebar.compact { width: 86%; } /* compact works as normal open on phones */
-}
-
-/* Live indicator pulse (respect reduced motion) */
-@media (prefers-reduced-motion: no-preference) {
-  .live-indicator { animation: pulse 2s ease-in-out infinite; }
-}
-@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.45} }
-
-/* Camera placeholder and video style */
-#cameraFeed { border-radius: 8px; background:#0b1220; display:none; width:100%; height:100%; object-fit:cover; }
-#cameraPlaceholder { display:flex; }
-
-/* Accessibility focus */
-.sidebar :focus, #menuToggle:focus, .nav-link:focus { outline: 3px solid rgba(99,102,241,0.14); outline-offset: 2px; border-radius:6px; }
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  .sidebar, .content-area, .sidebar-backdrop, .stat-card { transition: none !important; animation: none !important; transform: none !important; }
+/* Mobile responsive sidebar */
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+    }
+    .sidebar.mobile-open {
+        transform: translateX(0) !important;
+    }
+    .sa-overlay.active {
+        display: block !important;
+        opacity: 1 !important;
+    }
+    .sa-main-content {
+        margin-left: 0 !important;
+    }
 }
 </style>
 {% endblock %}
 
 
 {% block content %}
-<div class="flex h-screen bg-gray-50">
+<!-- Overlay for mobile -->
+<div id="sidebarOverlay" class="sa-overlay"></div>
+
+<div class="dashboard-container">
     <!-- Sidebar -->
-    <div id="sidebar" class="sidebar fixed md:static w-64 bg-gradient-to-b from-purple-600 to-purple-900 text-white h-full z-50 overflow-y-auto">
-        <div class="p-6 border-b border-purple-500">
-            <h1 class="text-2xl font-bold">Super Admin</h1>
+    <aside id="sidebar" class="sa-sidebar">
+        <div class="sa-sidebar-header">
+            <h1>Smart Attendance</h1>
+            <p class="text-sm opacity-80">Super Admin</p>
         </div>
         
-        <nav class="p-4">
-            <a href="/superadmin/dashboard" class="flex items-center p-3 mb-2 bg-purple-700 rounded-lg">
-                <i class="fas fa-dashboard mr-3"></i> Dashboard
+        <nav class="sa-sidebar-nav">
+            <a href="/superadmin/dashboard" class="sa-nav-link active">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
-            <a href="/superadmin/cameras" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-video mr-3"></i> Camera Manager
+            <a href="/superadmin/cameras" class="sa-nav-link">
+                <i class="fas fa-video"></i> Camera Manager
             </a>
-            <a href="/superadmin/admins" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-user-shield mr-3"></i> Manage Admins
+            <a href="/superadmin/admins" class="sa-nav-link">
+                <i class="fas fa-user-shield"></i> Manage Admins
             </a>
-            <a href="/superadmin/users" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-users mr-3"></i> All Users
+            <a href="/superadmin/users" class="sa-nav-link">
+                <i class="fas fa-users"></i> All Users
             </a>
-            <a href="/superadmin/logs" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-file-alt mr-3"></i> System Logs
+            <a href="/superadmin/logs" class="sa-nav-link">
+                <i class="fas fa-clipboard-list"></i> System Logs
             </a>
-            <button onclick="logout()" class="w-full flex items-center p-3 mt-4 hover:bg-red-600 rounded-lg">
-                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            <button onclick="logout()" class="sa-logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
             </button>
         </nav>
-    </div>
+    </aside>
     
     <!-- Main Content -->
-    <div class="flex-1 overflow-auto">
+    <main class="sa-main-content">
         <!-- Top Bar -->
-        <div class="bg-white shadow-sm p-4 flex justify-between items-center sticky top-0 z-40">
-            <div class="flex items-center gap-3">
-                <button id="menuToggle" class="text-gray-600 hover:text-gray-800 focus:outline-none">
-                    <i class="fas fa-bars text-2xl"></i>
+        <div class="sa-topbar">
+            <div class="sa-topbar-left">
+                <button id="menuToggle" class="sa-menu-toggle">
+                    <i class="fas fa-bars"></i>
                 </button>
-                <h2 class="text-2xl font-bold text-gray-800">Dashboard</h2>
+                <h2>Dashboard</h2>
             </div>
-            <div id="userInfo" class="text-right"></div>
+            <div id="userInfo" class="sa-user-info"></div>
         </div>
         
         <!-- Stats Grid -->
-        <div class="p-4 md:p-6">
-            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium">Total Admins</p>
-                            <p id="totalAdmins" class="text-3xl font-bold text-purple-600">0</p>
+        <div class="sa-content">
+            <div class="sa-stats-grid">
+                <div class="sa-stat-card">
+                    <div class="sa-stat-content">
+                        <div class="sa-stat-info">
+                            <p class="sa-stat-label">Total Admins</p>
+                            <p id="totalAdmins" class="sa-stat-value purple">0</p>
                         </div>
-                        <div class="bg-purple-100 p-3 rounded-full">
-                            <i class="fas fa-user-shield text-3xl text-purple-600"></i>
-                        </div>
+                        <i class="fas fa-user-shield sa-stat-icon purple"></i>
                     </div>
                 </div>
                 
-                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium">Total Users</p>
-                            <p id="totalUsers" class="text-3xl font-bold text-blue-600">0</p>
+                <div class="sa-stat-card">
+                    <div class="sa-stat-content">
+                        <div class="sa-stat-info">
+                            <p class="sa-stat-label">Total Users</p>
+                            <p id="totalUsers" class="sa-stat-value blue">0</p>
                         </div>
-                        <div class="bg-blue-100 p-3 rounded-full">
-                            <i class="fas fa-users text-3xl text-blue-600"></i>
-                        </div>
+                        <i class="fas fa-users sa-stat-icon blue"></i>
                     </div>
                 </div>
                 
-                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium">Enrolled</p>
-                            <p id="totalPersons" class="text-3xl font-bold text-green-600">0</p>
+                <div class="sa-stat-card">
+                    <div class="sa-stat-content">
+                        <div class="sa-stat-info">
+                            <p class="sa-stat-label">Enrolled</p>
+                            <p id="totalPersons" class="sa-stat-value green">0</p>
                         </div>
-                        <div class="bg-green-100 p-3 rounded-full">
-                            <i class="fas fa-id-card text-3xl text-green-600"></i>
-                        </div>
+                        <i class="fas fa-id-card sa-stat-icon green"></i>
                     </div>
                 </div>
                 
-                <div class="stat-card bg-white rounded-lg shadow-lg p-6">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <p class="text-gray-500 text-sm font-medium">Today's Attendance</p>
-                            <p id="todayAttendance" class="text-3xl font-bold text-orange-600">0</p>
+                <div class="sa-stat-card">
+                    <div class="sa-stat-content">
+                        <div class="sa-stat-info">
+                            <p class="sa-stat-label">Today's Attendance</p>
+                            <p id="todayAttendance" class="sa-stat-value orange">0</p>
                         </div>
-                        <div class="bg-orange-100 p-3 rounded-full">
-                            <i class="fas fa-calendar-check text-3xl text-orange-600"></i>
-                        </div>
+                        <i class="fas fa-calendar-check sa-stat-icon orange"></i>
                     </div>
                 </div>
             </div>
@@ -299,196 +227,68 @@
             </div>
             
             <!-- Recent System Logs -->
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <h3 class="text-xl font-bold mb-4 flex items-center">
-                    <i class="fas fa-file-alt mr-2 text-gray-600"></i>
-                    Recent System Logs
-                </h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
+            <div class="sa-card">
+                <div class="sa-card-header">
+                    <h3 class="sa-card-title">
+                        <i class="fas fa-clipboard-list"></i> Recent System Logs
+                    </h3>
+                </div>
+                <div class="sa-table-container">
+                    <table class="sa-table">
+                        <thead>
                             <tr>
-                                <th class="p-3 text-left text-sm font-semibold">Time</th>
-                                <th class="p-3 text-left text-sm font-semibold">User</th>
-                                <th class="p-3 text-left text-sm font-semibold">Action</th>
-                                <th class="p-3 text-left text-sm font-semibold hidden md:table-cell">Details</th>
+                                <th>Time</th>
+                                <th>User</th>
+                                <th>Action</th>
+                                <th class="hide-mobile">Details</th>
                             </tr>
                         </thead>
-                        <tbody id="logsTable" class="divide-y">
-                            <tr><td colspan="4" class="p-4 text-center text-gray-500">Loading...</td></tr>
+                        <tbody id="logsTable">
+                            <tr><td colspan="4" class="sa-text-center sa-text-muted">Loading...</td></tr>
                         </tbody>
                     </table>
                 </div>
             </div>
         </div>
-    </div>
+    </main>
 </div>
 
-<script>
-(function(){
-  const sidebar = document.getElementById('sidebar');
-  const menuToggle = document.getElementById('menuToggle');
-  const backdrop = document.getElementById('sidebarBackdrop');
-  const content = document.querySelector('.content-area') || document.querySelector('.flex-1');
-
-  // persist key for compact desktop sidebar
-  const COMPACT_KEY = 'sa_sidebar_compact_v1';
-
-  function isDesktop() { return window.matchMedia('(min-width: 1024px)').matches; }
-
-  // initialize states on load
-  function initSidebar() {
-    const compact = localStorage.getItem(COMPACT_KEY) === '1';
-    if (isDesktop()) {
-      // desktop: open by default (full) or compact if persisted
-      sidebar.classList.remove('closed');
-      if (compact) {
-        sidebar.classList.add('compact'); sidebar.classList.remove('open');
-        content && content.classList.add('sidebar-compact-desktop');
-        content && content.classList.remove('sidebar-open-desktop');
-      } else {
-        sidebar.classList.add('open'); sidebar.classList.remove('compact');
-        content && content.classList.add('sidebar-open-desktop');
-        content && content.classList.remove('sidebar-compact-desktop');
-      }
-      backdrop.classList.remove('visible');
-      document.body.style.overflow = '';
-    } else {
-      // mobile: closed by default (off-canvas)
-      sidebar.classList.add('closed'); sidebar.classList.remove('open'); sidebar.classList.remove('compact');
-      backdrop.classList.remove('visible');
-      content && content.classList.remove('sidebar-open-desktop', 'sidebar-compact-desktop');
-    }
-    updateAria();
-  }
-
-  // Toggle invoked by menu button
-  function toggleSidebar(e) {
-    // SHIFT-click on desktop toggles compact state
-    if (isDesktop() && e && e.shiftKey) {
-      const nowCompact = sidebar.classList.toggle('compact');
-      if (nowCompact) {
-        sidebar.classList.remove('open'); content && content.classList.add('sidebar-compact-desktop'); content && content.classList.remove('sidebar-open-desktop');
-        localStorage.setItem(COMPACT_KEY, '1');
-      } else {
-        sidebar.classList.add('open'); content && content.classList.add('sidebar-open-desktop'); content && content.classList.remove('sidebar-compact-desktop');
-        localStorage.setItem(COMPACT_KEY, '0');
-      }
-    } else if (isDesktop()) {
-      // Desktop normal toggle: switch between open <-> compact
-      if (sidebar.classList.contains('compact')) {
-        sidebar.classList.remove('compact'); sidebar.classList.add('open');
-        localStorage.setItem(COMPACT_KEY, '0');
-        content && content.classList.add('sidebar-open-desktop'); content && content.classList.remove('sidebar-compact-desktop');
-      } else if (sidebar.classList.contains('open')) {
-        // go to compact mode
-        sidebar.classList.remove('open'); sidebar.classList.add('compact');
-        localStorage.setItem(COMPACT_KEY, '1');
-        content && content.classList.add('sidebar-compact-desktop'); content && content.classList.remove('sidebar-open-desktop');
-      } else {
-        // closed -> open
-        sidebar.classList.add('open'); sidebar.classList.remove('closed');
-        content && content.classList.add('sidebar-open-desktop');
-        localStorage.setItem(COMPACT_KEY, '0');
-      }
-    } else {
-      // Mobile overlay open/close
-      if (sidebar.classList.contains('open') && !sidebar.classList.contains('closed')) {
-        closeMobile();
-      } else {
-        openMobile();
-      }
-    }
-    updateAria();
-  }
-
-  function openMobile() {
-    sidebar.classList.remove('closed'); sidebar.classList.add('open');
-    backdrop.classList.add('visible');
-    // lock document scroll
-    document.documentElement.style.overflow = 'hidden'; document.body.style.overflow = 'hidden';
-    // focus first focusable in sidebar
-    setTimeout(()=> {
-      const focusable = sidebar.querySelector('button, a, input, select, textarea');
-      if (focusable) focusable.focus();
-    }, 140);
-    updateAria();
-  }
-
-  function closeMobile() {
-    sidebar.classList.add('closed'); sidebar.classList.remove('open');
-    backdrop.classList.remove('visible');
-    document.documentElement.style.overflow = ''; document.body.style.overflow = '';
-    if (menuToggle) menuToggle.focus();
-    updateAria();
-  }
-
-  function updateAria() {
-    const expanded = sidebar.classList.contains('open') && !sidebar.classList.contains('closed');
-    if (menuToggle) menuToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-    sidebar.setAttribute('aria-hidden', (!expanded && !isDesktop()) ? 'true' : 'false');
-  }
-
-  // click outside handler for mobile
-  document.addEventListener('click', (e) => {
-    if (!isDesktop()) {
-      if (!sidebar.contains(e.target) && !menuToggle.contains(e.target) && sidebar.classList.contains('open')) {
-        closeMobile();
-      }
-    }
-  });
-
-  // backdrop click closes
-  backdrop.addEventListener('click', () => { if (!isDesktop()) closeMobile(); });
-
-  // Esc key to close mobile overlay
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (!isDesktop() && sidebar.classList.contains('open')) closeMobile();
-    }
-  });
-
-  // Ensure layout updates on resize
-  let resizeTimer = null;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(initSidebar, 150);
-  });
-
-  // Attach handler
-  if (menuToggle) menuToggle.addEventListener('click', toggleSidebar);
-
-  // Init on DOM ready
-  document.addEventListener('DOMContentLoaded', initSidebar);
-
-  // Expose minimal API for console
-  window.SAAdminUI = { openMobile, closeMobile, toggleSidebar, initSidebar };
-})();
-</script>
 
 <script>
-let sidebar, menuToggle;
-let dailyChart, weeklyChart, monthlyChart;
-let cameraStream = null;
-let attendanceRefreshInterval;
-
+// Sidebar Toggle
 document.addEventListener('DOMContentLoaded', () => {
-    sidebar = document.getElementById('sidebar');
-    menuToggle = document.getElementById('menuToggle');
+    const sidebar = document.getElementById('sidebar');
+    const menuToggle = document.getElementById('menuToggle');
+    const overlay = document.getElementById('sidebarOverlay');
     
+    // Toggle sidebar on mobile
     menuToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('hidden-mobile');
+        sidebar.classList.toggle('mobile-open');
+        overlay.classList.toggle('active');
     });
     
-    // Close sidebar when clicking outside on mobile
-    document.addEventListener('click', (e) => {
-        if (window.innerWidth < 768) {
-            if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
-                sidebar.classList.add('hidden-mobile');
-            }
+    // Close sidebar when clicking overlay
+    overlay.addEventListener('click', () => {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+    });
+    
+    // Close sidebar on escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape') {
+            sidebar.classList.remove('mobile-open');
+            overlay.classList.remove('active');
         }
     });
     
+    // Initialize dashboard
+    initDashboard();
+});
+
+let dailyChart, weeklyChart, monthlyChart;
+let attendanceRefreshInterval;
+
+function initDashboard() {
     loadUserInfo();
     loadStats();
     loadLogs();
@@ -498,17 +298,16 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // Auto-refresh live attendance every 10 seconds
     attendanceRefreshInterval = setInterval(loadLiveAttendance, 10000);
-});
+}
 
 async function loadUserInfo() {
     try {
-        const response = await apiRequest('/auth/me');
-        const data = await response.json();
-        
+        const response = await fetch('/auth/me');
         if (response.ok) {
+            const data = await response.json();
             document.getElementById('userInfo').innerHTML = `
-                <p class="font-semibold text-gray-800">${data.user.name}</p>
-                <p class="text-sm text-gray-600">${data.user.email}</p>
+                <p class="sa-user-name">${data.user.name || 'Super Admin'}</p>
+                <p class="sa-user-email">${data.user.email}</p>
             `;
         }
     } catch (error) {
@@ -518,14 +317,13 @@ async function loadUserInfo() {
 
 async function loadStats() {
     try {
-        const response = await apiRequest('/superadmin/stats');
-        const data = await response.json();
-        
+        const response = await fetch('/superadmin/stats');
         if (response.ok) {
-            document.getElementById('totalAdmins').textContent = data.total_admins;
-            document.getElementById('totalUsers').textContent = data.total_users;
-            document.getElementById('totalPersons').textContent = data.total_persons;
-            document.getElementById('todayAttendance').textContent = data.today_attendance;
+            const data = await response.json();
+            document.getElementById('totalAdmins').textContent = data.total_admins || 0;
+            document.getElementById('totalUsers').textContent = data.total_users || 0;
+            document.getElementById('totalPersons').textContent = data.total_persons || 0;
+            document.getElementById('todayAttendance').textContent = data.today_attendance || 0;
         }
     } catch (error) {
         console.error('Error loading stats:', error);
@@ -534,7 +332,7 @@ async function loadStats() {
 
 async function loadLiveAttendance() {
     try {
-        const response = await apiRequest('/superadmin/attendance/live?limit=10');
+        const response = await fetch('/superadmin/attendance/live?limit=10');
         const data = await response.json();
         
         if (response.ok && data.attendance && data.attendance.length > 0) {
@@ -590,7 +388,7 @@ function getTimeAgo(date) {
 
 async function loadCharts() {
     try {
-        const response = await apiRequest('/superadmin/attendance/stats?days=30');
+        const response = await fetch('/superadmin/attendance/stats?days=30');
         const data = await response.json();
         
         if (response.ok) {
@@ -708,7 +506,7 @@ function createMonthlyChart(dailyData) {
 
 async function loadUserPatterns() {
     try {
-        const response = await apiRequest('/superadmin/users');
+        const response = await fetch('/api/superadmin/users');
         const data = await response.json();
         
         if (response.ok && data.users) {
@@ -753,7 +551,7 @@ async function loadUserPatterns() {
 
 async function loadLogs() {
     try {
-        const response = await apiRequest('/superadmin/logs?per_page=10');
+        const response = await fetch('/api/superadmin/logs?per_page=10');
         const data = await response.json();
         
         if (response.ok && data.logs.length > 0) {
@@ -781,53 +579,19 @@ async function loadLogs() {
 }
 
 async function startCameraFeed() {
-    try {
-        cameraStream = await navigator.mediaDevices.getUserMedia({ 
-            video: { 
-                facingMode: 'user',
-                width: { ideal: 1280 },
-                height: { ideal: 720 }
-            } 
-        });
-        
-        const video = document.getElementById('cameraFeed');
-        const placeholder = document.getElementById('cameraPlaceholder');
-        
-        video.srcObject = cameraStream;
-        placeholder.style.display = 'none';
-        video.style.display = 'block';
-        
-        showToast('Camera feed started', 'success');
-    } catch (error) {
-        console.error('Camera error:', error);
-        showToast('Failed to start camera feed', 'error');
-    }
+    showToast('Camera feed is managed in Camera Manager page', 'info');
 }
 
 function stopCameraFeed() {
-    if (cameraStream) {
-        cameraStream.getTracks().forEach(track => track.stop());
-        
-        const video = document.getElementById('cameraFeed');
-        const placeholder = document.getElementById('cameraPlaceholder');
-        
-        video.srcObject = null;
-        video.style.display = 'none';
-        placeholder.style.display = 'flex';
-        
-        cameraStream = null;
-        showToast('Camera feed stopped', 'info');
-    }
+    showToast('Use Camera Manager page for camera controls', 'info');
 }
 
 function refreshCameraFeed() {
-    stopCameraFeed();
-    setTimeout(startCameraFeed, 500);
+    showToast('Use Camera Manager page for camera controls', 'info');
 }
 
 // Cleanup on page unload
 window.addEventListener('beforeunload', () => {
-    stopCameraFeed();
     if (attendanceRefreshInterval) {
         clearInterval(attendanceRefreshInterval);
     }

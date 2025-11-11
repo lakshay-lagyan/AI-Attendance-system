@@ -314,10 +314,11 @@ def superadmin_stats_api():
     """API endpoint for super admin statistics"""
     try:
         stats = {
-            "total_users": persons_col.count_documents({"status": {"$ne": "blocked"}}),
+            "total_users": users_col.count_documents({}),
             "total_admins": admins_col.count_documents({}),
+            "total_persons": persons_col.count_documents({"status": {"$ne": "blocked"}}),
             "pending_enrollments": enrollment_requests_col.count_documents({"status": "pending"}),
-            "total_attendance_today": attendance_col.count_documents({
+            "today_attendance": attendance_col.count_documents({
                 "timestamp": {
                     "$gte": datetime.datetime.combine(datetime.date.today(), datetime.time.min),
                     "$lt": datetime.datetime.combine(datetime.date.today(), datetime.time.max)

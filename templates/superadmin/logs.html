@@ -4,183 +4,59 @@
 
 
 {% block extra_styles %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/superadmin_dashboard.css') }}">
+<script src="https://cdn.tailwindcss.com"></script>
 <style>
-/* Container perspective to enhance 3D effect */
-.dashboard-root {
-  perspective: 1400px;
-  --sidebar-width: 260px;
-  --sidebar-compact: 76px;
-  --sidebar-transition: 420ms cubic-bezier(.2,.9,.2,1);
-}
-
-/* Base sidebar */
-.sidebar {
-  width: var(--sidebar-width);
-  height: 100vh;
-  transform-origin: left center;
-  backface-visibility: hidden;
-  will-change: transform, box-shadow;
-  transition: transform var(--sidebar-transition), box-shadow 260ms ease, width 260ms ease;
-  z-index: 50;
-  /* keep fixed on small screens so overlay works */
-  position: fixed;
-  left: 0;
-  top: 0;
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
-}
-
-/* Desktop: static flow (if you prefer static sidebar on wide screens, override with md:static as in your markup) */
-/* Keep the 3D transform but align with static layout on medium+ screens */
-@media (min-width: 768px) {
-  .sidebar {
-    position: sticky; /* allows layout flow but still animate visually */
-    top: 0;
-    height: 100vh;
-  }
-}
-
-/* Closed state (mobile hidden / desktop partially hidden) */
-.sidebar.closed {
-  transform: translateX(-100%) rotateY(-12deg) translateZ(-10px) scale(0.98);
-  box-shadow: none;
-}
-
-/* Open (visible) 3D popped sidebar */
-.sidebar.open {
-  transform: translateX(0) rotateY(0deg) translateZ(0);
-  box-shadow: 0 40px 80px rgba(8, 12, 30, 0.45);
-}
-
-/* Compact (desktop collapsed) - icons only */
-.sidebar.compact {
-  width: var(--sidebar-compact);
-  transform: translateX(0) rotateY(-6deg) translateZ(6px) scale(0.99);
-}
-.sidebar.compact .nav-label { display: none; }
-.sidebar.compact .nav-icon { margin-right: 0; text-align: center; width: 100%; }
-
-/* Overlay backdrop for mobile */
-.sidebar-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.45);
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 260ms ease, visibility 260ms;
-  z-index: 40;
-}
-.sidebar-backdrop.visible {
-  opacity: 1;
-  visibility: visible;
-}
-
-/* Push content when sidebar open on desktop */
-.content-area {
-  transition: margin-left var(--sidebar-transition);
-}
-@media (min-width: 1024px) {
-  .content-area.sidebar-open-desktop {
-    margin-left: var(--sidebar-width);
-  }
-  .content-area.sidebar-compact-desktop {
-    margin-left: var(--sidebar-compact);
-  }
-}
-
-/* Menu toggle styling — keep it easy to spot */
-#menuToggle {
-  display: inline-flex;
-  align-items: center;
-  gap: .5rem;
-  padding: .25rem .5rem;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: inherit;
-}
-
-/* Nice focus ring for keyboard users */
-.sidebar :focus,
-#menuToggle:focus {
-  outline: 3px solid rgba(99,102,241,0.18);
-  outline-offset: 2px;
-  border-radius: 6px;
-}
-
-/* Small visual polish for nav items */
-.sidebar .nav-link {
-  display: flex;
-  gap: 0.75rem;
-  align-items: center;
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  transition: background 180ms ease, transform 200ms ease;
-}
-.sidebar .nav-link:hover {
-  transform: translateX(4px);
-  background: rgba(255,255,255,0.04);
-}
-.sidebar .nav-icon {
-  width: 28px;
-  display: inline-flex;
-  justify-content: center;
-}
-
-/* Responsive adjustments */
-@media (max-width: 767px) {
-  .sidebar { width: 86%; max-width: 320px; }
-  .sidebar.compact { width: 86%; } /* compact mode effectively same as open on mobiles */
-  .sidebar.closed { transform: translateX(-110%); }
-}
-
-/* Accessibility: reduced-motion */
-@media (prefers-reduced-motion: reduce) {
-  .sidebar, .content-area, .sidebar-backdrop { transition: none !important; transform: none !important; }
-}
-
-/* small helper for page content area to scroll nicely */
-.page-inner {
-  min-height: 100vh;
-  padding: 1rem;
-  background: linear-gradient(180deg,#f8fafc 0,#f1f5f9 100%);
+@media (max-width: 768px) {
+    .sidebar { transform: translateX(-100%); }
+    .sidebar.mobile-open { transform: translateX(0) !important; }
+    .sa-overlay.active { display: block !important; opacity: 1 !important; }
+    .sa-main-content { margin-left: 0 !important; }
 }
 </style>
 {% endblock %}
 
 
 {% block content %}
-<div class="flex h-screen bg-gray-100">
-    <div id="sidebar" class="sidebar fixed md:static w-64 bg-gradient-to-b from-purple-600 to-purple-900 text-white h-full z-50">
-        <div class="p-6 border-b border-purple-500">
-            <h1 class="text-2xl font-bold">Super Admin</h1>
+<div id="sidebarOverlay" class="sa-overlay"></div>
+
+<div class="dashboard-container">
+    <aside id="sidebar" class="sa-sidebar">
+        <div class="sa-sidebar-header">
+            <h1>Smart Attendance</h1>
+            <p class="text-sm opacity-80">Super Admin</p>
         </div>
         
-        <nav class="p-4">
-            <a href="/superadmin/dashboard" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-dashboard mr-3"></i> Dashboard
+        <nav class="sa-sidebar-nav">
+            <a href="/superadmin/dashboard" class="sa-nav-link">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
-            <a href="/superadmin/admins" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-user-shield mr-3"></i> Manage People
+            <a href="/superadmin/cameras" class="sa-nav-link">
+                <i class="fas fa-video"></i> Camera Manager
             </a>
-            <a href="/superadmin/users" class="flex items-center p-3 mb-2 hover:bg-purple-700 rounded-lg">
-                <i class="fas fa-users mr-3"></i> All Users
+            <a href="/superadmin/admins" class="sa-nav-link">
+                <i class="fas fa-user-shield"></i> Manage Admins
             </a>
-            <a href="/superadmin/logs" class="flex items-center p-3 mb-2 bg-purple-700 rounded-lg">
-                <i class="fas fa-file-alt mr-3"></i> System Logs
+            <a href="/superadmin/users" class="sa-nav-link">
+                <i class="fas fa-users"></i> All Users
             </a>
-            <button onclick="logout()" class="w-full flex items-center p-3 mt-4 hover:bg-red-600 rounded-lg">
-                <i class="fas fa-sign-out-alt mr-3"></i> Logout
+            <a href="/superadmin/logs" class="sa-nav-link active">
+                <i class="fas fa-clipboard-list"></i> System Logs
+            </a>
+            <button onclick="logout()" class="sa-logout-btn">
+                <i class="fas fa-sign-out-alt"></i> Logout
             </button>
         </nav>
-    </div>
+    </aside>
     
-    <div class="flex-1 overflow-auto">
-        <div class="bg-white shadow-sm p-4 flex justify-between items-center">
-            <button id="menuToggle" class="md:hidden text-gray-600">
-                <i class="fas fa-bars text-2xl"></i>
-            </button>
-            <h2 class="text-2xl font-bold text-gray-800">System Logs</h2>
+    <main class="sa-main-content">
+        <div class="sa-topbar">
+            <div class="sa-topbar-left">
+                <button id="menuToggle" class="sa-menu-toggle">
+                    <i class="fas fa-bars"></i>
+                </button>
+                <h2>System Logs</h2>
+            </div>
             <div class="flex gap-2">
                 <select id="filterType" class="px-3 py-2 border rounded-lg">
                     <option value="">All Types</option>
@@ -228,186 +104,6 @@
         </div>
     </div>
 </div>
-
-<script>
-(function(){
-  const sidebar = document.getElementById('sidebar');
-  const menuToggle = document.getElementById('menuToggle');
-  const body = document.body;
-  const content = document.querySelector('.flex-1') || document.querySelector('.content-area');
-  // create backdrop
-  let backdrop = document.querySelector('.sidebar-backdrop');
-  if(!backdrop){
-    backdrop = document.createElement('div');
-    backdrop.className = 'sidebar-backdrop';
-    document.body.appendChild(backdrop);
-  }
-
-  // Ensure dashboard-root class on top-level container to enable perspective
-  const root = document.querySelector('.flex.h-screen') || document.querySelector('body');
-  root.classList.add('dashboard-root');
-
-  // Read persisted desktop compact preference
-  const DESKTOP_COMPACT_KEY = 'sa_sidebar_compact';
-  function isDesktop() { return window.matchMedia('(min-width: 1024px)').matches; }
-
-  // initialize states
-  function init() {
-    const compact = localStorage.getItem(DESKTOP_COMPACT_KEY) === '1';
-    if (isDesktop() && compact) {
-      sidebar.classList.add('compact');
-      content && content.classList.add('sidebar-compact-desktop');
-    } else {
-      sidebar.classList.remove('compact');
-      content && content.classList.remove('sidebar-compact-desktop');
-    }
-    // on narrow screens keep sidebar closed by default
-    if (!isDesktop()) {
-      sidebar.classList.add('closed');
-      backdrop.classList.remove('visible');
-      content && content.classList.remove('sidebar-open-desktop');
-    } else {
-      // open on desktop by default
-      sidebar.classList.remove('closed');
-      sidebar.classList.add('open');
-      content && content.classList.add('sidebar-open-desktop');
-      backdrop.classList.remove('visible');
-    }
-  }
-
-  // Toggle open/close (mobile overlay or desktop push)
-  function toggleSidebar() {
-    if (isDesktop()) {
-      // On desktop: toggle compact mode with Shift+Click OR normal toggle
-      if (sidebar.classList.contains('compact')) {
-        // expand to full
-        sidebar.classList.remove('compact');
-        sidebar.classList.add('open');
-        content && content.classList.remove('sidebar-compact-desktop');
-        content && content.classList.add('sidebar-open-desktop');
-        localStorage.setItem(DESKTOP_COMPACT_KEY, '0');
-      } else if (sidebar.classList.contains('open')) {
-        // collapse to compact
-        sidebar.classList.remove('open');
-        sidebar.classList.add('compact');
-        content && content.classList.remove('sidebar-open-desktop');
-        content && content.classList.add('sidebar-compact-desktop');
-        localStorage.setItem(DESKTOP_COMPACT_KEY, '1');
-      } else {
-        // if somehow closed, open it
-        sidebar.classList.add('open');
-        content && content.classList.add('sidebar-open-desktop');
-        localStorage.setItem(DESKTOP_COMPACT_KEY, '0');
-      }
-    } else {
-      // Mobile overlay: open/close fully
-      if (sidebar.classList.contains('open') && !sidebar.classList.contains('closed')) {
-        closeMobile();
-      } else {
-        openMobile();
-      }
-    }
-    updateAria();
-  }
-
-  function openMobile() {
-    sidebar.classList.remove('closed');
-    sidebar.classList.add('open');
-    backdrop.classList.add('visible');
-    // lock body scroll
-    document.documentElement.style.overflow = 'hidden';
-    document.body.style.overflow = 'hidden';
-    content && content.classList.remove('sidebar-open-desktop');
-    updateAria();
-    // focus first focusable element inside sidebar
-    setTimeout(()=> {
-      const focusable = sidebar.querySelector('button, [href], input, select, textarea');
-      if (focusable) focusable.focus();
-    }, 120);
-  }
-
-  function closeMobile() {
-    sidebar.classList.add('closed');
-    sidebar.classList.remove('open');
-    backdrop.classList.remove('visible');
-    document.documentElement.style.overflow = '';
-    document.body.style.overflow = '';
-    updateAria();
-    // return focus to menu toggle
-    menuToggle && menuToggle.focus();
-  }
-
-  function updateAria() {
-    const expanded = sidebar.classList.contains('open') && !sidebar.classList.contains('closed');
-    if (menuToggle) menuToggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
-  }
-
-  // Click handlers
-  if (menuToggle) {
-    menuToggle.addEventListener('click', (e) => {
-      // if user holds shift while clicking on desktop, force compact toggle
-      if (isDesktop() && e.shiftKey) {
-        const isCompact = sidebar.classList.contains('compact');
-        if (isCompact) {
-          sidebar.classList.remove('compact');
-          sidebar.classList.add('open');
-          localStorage.setItem(DESKTOP_COMPACT_KEY, '0');
-        } else {
-          sidebar.classList.remove('open');
-          sidebar.classList.add('compact');
-          localStorage.setItem(DESKTOP_COMPACT_KEY, '1');
-        }
-        content && content.classList.toggle('sidebar-compact-desktop');
-        return;
-      }
-      toggleSidebar();
-    });
-  }
-
-  // Backdrop click closes mobile sidebar
-  backdrop.addEventListener('click', () => {
-    if (!isDesktop()) closeMobile();
-  });
-
-  // Close on Esc
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') {
-      if (!isDesktop() && sidebar.classList.contains('open')) {
-        closeMobile();
-      }
-    }
-  });
-
-  // Close sidebar on route/navigation (optional hook: look for links inside sidebar)
-  sidebar.addEventListener('click', (e) => {
-    const link = e.target.closest('a');
-    if (link && !isDesktop()) {
-      // close overlay when navigating on mobile
-      closeMobile();
-    }
-  });
-
-  // Watch for resize to re-init layout state
-  let resizeTimer = null;
-  window.addEventListener('resize', () => {
-    clearTimeout(resizeTimer);
-    resizeTimer = setTimeout(()=> {
-      init();
-    }, 160);
-  });
-
-  // init at load
-  document.addEventListener('DOMContentLoaded', init);
-
-  // expose a small API if you want to control from console
-  window.SASidebar = {
-    openMobile, closeMobile, toggleSidebar,
-    setCompact: (v) => {
-      if (v) sidebar.classList.add('compact'); else sidebar.classList.remove('compact');
-    }
-  };
-})();
-</script>
 
 <script>
 let currentPage = 1;
@@ -508,5 +204,27 @@ function refreshLogs() {
     loadLogs();
     showToast('Logs refreshed', 'success');
 }
+
+// Sidebar Toggle
+const sidebar = document.getElementById('sidebar');
+const menuToggle = document.getElementById('menuToggle');
+const overlay = document.getElementById('sidebarOverlay');
+
+menuToggle.addEventListener('click', () => {
+    sidebar.classList.toggle('mobile-open');
+    overlay.classList.toggle('active');
+});
+
+overlay.addEventListener('click', () => {
+    sidebar.classList.remove('mobile-open');
+    overlay.classList.remove('active');
+});
+
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        sidebar.classList.remove('mobile-open');
+        overlay.classList.remove('active');
+    }
+});
 </script>
 {% endblock %}
