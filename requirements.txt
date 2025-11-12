@@ -35,3 +35,5 @@ requests==2.31.0
 
 # Rate Limiting & Security
 Flask-Limiter==3.5.0
+
+email-validator

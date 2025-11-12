@@ -14,6 +14,13 @@ from flask_login import LoginManager, UserMixin, login_user, logout_user, curren
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 from functools import wraps
+import re
+from email_validator import validate_email, EmailNotValidError
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+from bson import ObjectId
+from datetime import datetime, timedelta
+import threading
 
 from function import generate_camera_stream, get_face_embedding, continuous_learning_update, create_3d_template, extract_multi_vector_embeddings, ensemble_matching, search_face_faiss, rebuild_faiss_index
 
@@ -45,6 +52,60 @@ users_col = core["users"]
 enrollment_requests_col = core["enrollment_requests"]
 system_logs_col = core["system_logs"]  # System logs collection
 cameras_col = core["cameras"]  # Camera management collection
+
+# Email Verification System 
+class EmailVerificationSystem:
+    
+    @staticmethod
+    def verify_email_format(email: str) -> dict:
+        """Verify email format and structure"""
+        try:
+            # Basic format check
+            email_regex = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            if not re.match(email_regex, email):
+                return {
+                    "valid": False,
+                    "reason": "Invalid email format",
+                    "tag": "INVALID_FORMAT"
+                }
+            
+            # Advanced validation with email-validator
+            try:
+                validation = validate_email(email, check_deliverability=True)
+                email_normalized = validation.normalized
+                
+                return {
+                    "valid": True,
+                    "normalized": email_normalized,
+                    "domain": email.split('@')[1],
+                    "tag": "VERIFIED",
+                    "mx_records_exist": True
+                }
+            except EmailNotValidError as e:
+                return {
+                    "valid": False,
+                    "reason": str(e),
+                    "tag": "INVALID_DOMAIN"
+                }
+                
+        except Exception as e:
+            return {
+                "valid": False,
+                "reason": f"Verification error: {str(e)}",
+                "tag": "ERROR"
+            }
+    
+    @staticmethod
+    def is_disposable_email(email: str) -> bool:
+        """Check if email is from disposable domain"""
+        disposable_domains = [
+            'tempmail.com', 'guerrillamail.com', '10minutemail.com',
+            'mailinator.com', 'throwaway.email', 'temp-mail.org'
+        ]
+        domain = email.split('@')[1].lower()
+        return domain in disposable_domains
+
+email_verifier = EmailVerificationSystem()
 
 # FAISS Vector Database Setup
 EMBEDDING_DIM = 512
@@ -1029,6 +1090,7 @@ def mobile_capture():
 
 @app.route("/api/mobile/mark_attendance", methods=["POST"])
 @limiter.limit("20 per hour")
+    """Fast email verification system"""
 def mobile_mark_attendance():
     """Mark attendance from mobile camera capture"""
     try:
@@ -1312,51 +1374,228 @@ def superadmin_admins():
 
 @app.route("/api/superadmin/create_admin", methods=["POST"])
 @superadmin_required
-def superadmin_create_admin():
-    """Create new admin"""
+def superadmin_create_admin_fixed():
+    """Create new admin with email verification"""
     try:
-        # Handle both JSON and form data
-        if request.is_json:
-            data = request.get_json()
-            name = data.get("name", "").strip()
-            email = data.get("email", "").strip().lower()
-            password = data.get("password", "")
-            department = data.get("department", "").strip()
-        else:
-            name = request.form.get("name", "").strip()
-            email = request.form.get("email", "").strip().lower()
-            password = request.form.get("password", "")
-            department = request.form.get("department", "").strip()
+        data = request.get_json()
+        name = data.get("name", "").strip()
+        email = data.get("email", "").strip().lower()
+        password = data.get("password", "")
+        department = data.get("department", "").strip()
         
-        if not name or not email or not password:
-            return jsonify({"status": "failed", "error": "All fields required", "msg": "All fields required"}), 400
+        if not all([name, email, password]):
+            return jsonify({
+                "status": "failed",
+                "error": "Name, email, and password are required"
+            }), 400
         
-        if admins_col.find_one({"email": email}):
-            return jsonify({"status": "failed", "error": "Admin already exists", "msg": "Admin already exists"}), 400
+        # Verify email
+        email_check = email_verifier.verify_email_format(email)
+        if not email_check["valid"]:
+            return jsonify({
+                "status": "failed",
+                "error": f"Invalid email: {email_check['reason']}",
+                "email_tag": email_check["tag"]
+            }), 400
         
+        # Check for disposable email
+        if email_verifier.is_disposable_email(email):
+            return jsonify({
+                "status": "failed",
+                "error": "Disposable email addresses are not allowed",
+                "email_tag": "DISPOSABLE"
+            }), 400
+        
+        # Check if admin already exists
+        existing_admin = admins_col.find_one({"email": email})
+        if existing_admin:
+            return jsonify({
+                "status": "failed",
+                "error": "Admin with this email already exists"
+            }), 400
+        
+        # Create admin
         admin_id = f"{datetime.datetime.utcnow().timestamp()}_{email}"
         admin_doc = {
             "_id": admin_id,
             "name": name,
             "email": email,
             "password_hash": generate_password_hash(password),
-            "department": department if department else None,
+            "department": department or None,
             "profile_image": "",
             "is_active": True,
+            "email_verified": True,
+            "email_tag": email_check.get("tag", "VERIFIED"),
             "created_at": datetime.datetime.utcnow(),
             "created_by": current_user.email
         }
+        
         admins_col.insert_one(admin_doc)
         
         # Log action
         system_logs_col.insert_one({
             "action": "create_admin",
+            "user": current_user.email,
             "admin_email": email,
-            "performed_by": current_user.email,
-            "timestamp": datetime.datetime.utcnow()
+            "timestamp": datetime.datetime.utcnow(),
+            "status": "success",
+            "details": f"Created admin: {name}",
+            "ip_address": request.remote_addr
         })
         
-        return jsonify({"status": "success", "msg": f"Admin {name} created successfully"})
+        return jsonify({
+            "status": "success",
+            "msg": f"Admin {name} created successfully",
+            "admin_id": admin_id,
+            "email_verified": True
+        })
+        
+    except Exception as e:
+        print(f"Error creating admin: {e}")
+        import traceback
+        traceback.print_exc()
+        
+        # Log error
+        system_logs_col.insert_one({
+            "action": "create_admin_error",
+            "user": current_user.email,
+            "timestamp": datetime.datetime.utcnow(),
+            "status": "error",
+            "details": str(e)
+        })
+        
+        return jsonify({
+            "status": "failed",
+            "error": str(e)
+        }), 500
+
+
+# @app.route("/api/superadmin/create_admin", methods=["POST"])
+# @superadmin_required
+# def superadmin_create_admin():
+#     """Create new admin"""
+#     try:
+#         # Handle both JSON and form data
+#         if request.is_json:
+#             data = request.get_json()
+#             name = data.get("name", "").strip()
+#             email = data.get("email", "").strip().lower()
+#             password = data.get("password", "")
+#             department = data.get("department", "").strip()
+#         else:
+#             name = request.form.get("name", "").strip()
+#             email = request.form.get("email", "").strip().lower()
+#             password = request.form.get("password", "")
+#             department = request.form.get("department", "").strip()
+        
+#         if not name or not email or not password:
+#             return jsonify({"status": "failed", "error": "All fields required", "msg": "All fields required"}), 400
+        
+#         if admins_col.find_one({"email": email}):
+#             return jsonify({"status": "failed", "error": "Admin already exists", "msg": "Admin already exists"}), 400
+        
+#         admin_id = f"{datetime.datetime.utcnow().timestamp()}_{email}"
+#         admin_doc = {
+#             "_id": admin_id,
+#             "name": name,
+#             "email": email,
+#             "password_hash": generate_password_hash(password),
+#             "department": department if department else None,
+#             "profile_image": "",
+#             "is_active": True,
+#             "created_at": datetime.datetime.utcnow(),
+#             "created_by": current_user.email
+#         }
+#         admins_col.insert_one(admin_doc)
+        
+#         # Log action
+#         system_logs_col.insert_one({
+#             "action": "create_admin",
+#             "admin_email": email,
+#             "performed_by": current_user.email,
+#             "timestamp": datetime.datetime.utcnow()
+#         })
+        
+#         return jsonify({"status": "success", "msg": f"Admin {name} created successfully"})
+#     except Exception as e:
+#         return jsonify({"status": "failed", "msg": str(e)}), 500
+@app.route("/api/superadmin/admin/<admin_id>/block", methods=["POST"])
+@superadmin_required
+def block_admin_fixed(admin_id):
+    """Block an admin"""
+    try:
+        admin = admins_col.find_one({"_id": admin_id})
+        if not admin:
+            return jsonify({"status": "failed", "msg": "Admin not found"}), 404
+        
+        # Update admin status
+        result = admins_col.update_one(
+            {"_id": admin_id},
+            {"$set": {
+                "is_active": False,
+                "blocked_at": datetime.datetime.utcnow(),
+                "blocked_by": current_user.email
+            }}
+        )
+        
+        if result.modified_count > 0:
+            # Log action
+            system_logs_col.insert_one({
+                "action": "block_admin",
+                "user": current_user.email,
+                "admin_id": admin_id,
+                "admin_email": admin.get("email"),
+                "timestamp": datetime.datetime.utcnow(),
+                "status": "success"
+            })
+            
+            return jsonify({
+                "status": "success",
+                "msg": f"Admin {admin.get('name')} blocked successfully"
+            })
+        
+        return jsonify({"status": "failed", "msg": "Failed to block admin"}), 500
+        
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/admin/<admin_id>/unblock", methods=["POST"])
+@superadmin_required
+def unblock_admin_fixed(admin_id):
+    """Unblock an admin"""
+    try:
+        admin = admins_col.find_one({"_id": admin_id})
+        if not admin:
+            return jsonify({"status": "failed", "msg": "Admin not found"}), 404
+        
+        # Update admin status
+        result = admins_col.update_one(
+            {"_id": admin_id},
+            {"$set": {
+                "is_active": True,
+                "unblocked_at": datetime.datetime.utcnow(),
+                "unblocked_by": current_user.email
+            }}
+        )
+        
+        if result.modified_count > 0:
+            # Log action
+            system_logs_col.insert_one({
+                "action": "unblock_admin",
+                "user": current_user.email,
+                "admin_id": admin_id,
+                "admin_email": admin.get("email"),
+                "timestamp": datetime.datetime.utcnow(),
+                "status": "success"
+            })
+            
+            return jsonify({
+                "status": "success",
+                "msg": f"Admin {admin.get('name')} unblocked successfully"
+            })
+        
+        return jsonify({"status": "failed", "msg": "Failed to unblock admin"}), 500
+        
     except Exception as e:
         return jsonify({"status": "failed", "msg": str(e)}), 500
 
@@ -1498,6 +1737,42 @@ def api_get_logs():
             "page": page,
             "per_page": per_page,
             "total_pages": (total + per_page - 1) // per_page
+        })
+    except Exception as e:
+        return jsonify({"status": "failed", "msg": str(e)}), 500
+
+@app.route("/api/superadmin/logs/live")
+@superadmin_required
+def get_live_logs():
+    """Get latest system logs with real-time updates"""
+    try:
+        limit = int(request.args.get("limit", 50))
+        
+        # Get latest logs
+        logs = list(
+            system_logs_col.find()
+            .sort("timestamp", -1)
+            .limit(limit)
+        )
+        
+        # Format logs
+        formatted_logs = []
+        for log in logs:
+            formatted_logs.append({
+                "_id": str(log.get("_id", "")),
+                "action": log.get("action", "unknown"),
+                "user": log.get("user", "system"),
+                "timestamp": log.get("timestamp", datetime.datetime.utcnow()).isoformat(),
+                "status": log.get("status", "info"),
+                "details": log.get("details", ""),
+                "ip_address": log.get("ip_address", ""),
+                "user_agent": log.get("user_agent", "")
+            })
+        
+        return jsonify({
+            "status": "success",
+            "logs": formatted_logs,
+            "count": len(formatted_logs)
         })
     except Exception as e:
         return jsonify({"status": "failed", "msg": str(e)}), 500
@@ -1896,6 +2171,653 @@ def camera_feed(camera_id):
     
     return Response(generate_frames(camera_id),
                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# ============================================================================
+# SUPER ADMIN API ROUTES - FIXED VERSION
+# Add these routes to main.py after the existing admin routes
+# ============================================================================
+
+from bson import ObjectId
+from datetime import datetime, timedelta
+import threading
+
+# ============================================================================
+# SUPER ADMIN DASHBOARD STATS
+# ============================================================================
+
+@app.route("/api/superadmin/stats")
+@superadmin_required
+def superadmin_stats():
+    """Get comprehensive super admin statistics"""
+    try:
+        # Get today's date range
+        today_start = datetime.combine(datetime.today(), datetime.time.min)
+        today_end = datetime.combine(datetime.today(), datetime.time.max)
+        
+        stats = {
+            "total_superadmins": superadmins_col.count_documents({}),
+            "total_admins": admins_col.count_documents({}),
+            "total_users": users_col.count_documents({}),
+            "total_persons": persons_col.count_documents({"status": {"$ne": "blocked"}}),
+            "active_users": users_col.count_documents({"status": "active"}),
+            "blocked_users": users_col.count_documents({"status": "blocked"}),
+            "pending_enrollments": enrollment_requests_col.count_documents({"status": "pending"}),
+            "today_attendance": attendance_col.count_documents({
+                "timestamp": {
+                    "$gte": today_start,
+                    "$lt": today_end
+                }
+            }),
+            "total_attendance": attendance_col.count_documents({}),
+            "total_cameras": cameras_col.count_documents({}),
+            "active_cameras": len([c for c in active_camera_streams.keys()]),
+            "faiss_index_size": faiss_index.ntotal if faiss_index else 0,
+            "system_health": "healthy"
+        }
+        
+        return jsonify(stats), 200
+    except Exception as e:
+        print(f"[Stats Error] {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+# ============================================================================
+# CAMERA MANAGEMENT API - FIXED
+# ============================================================================
+
+@app.route("/api/superadmin/cameras", methods=["GET"])
+@superadmin_required
+def api_get_cameras():
+    """Get all cameras"""
+    try:
+        cameras = list(cameras_col.find({}))
+        
+        for cam in cameras:
+            cam["_id"] = str(cam["_id"])
+            cam["is_active"] = str(cam["_id"]) in active_camera_streams
+            
+            # Convert datetime fields
+            if "created_at" in cam and cam["created_at"]:
+                try:
+                    cam["created_at"] = cam["created_at"].isoformat()
+                except:
+                    pass
+            
+            if "last_seen" in cam and cam["last_seen"]:
+                try:
+                    cam["last_seen"] = cam["last_seen"].isoformat()
+                except:
+                    pass
+        
+        return jsonify({"status": "success", "cameras": cameras}), 200
+    except Exception as e:
+        print(f"[Get Cameras Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+@app.route("/api/superadmin/cameras", methods=["POST"])
+@limiter.limit("20 per hour")
+@superadmin_required
+def api_create_camera():
+    """Create new camera"""
+    try:
+        data = request.get_json()
+        
+        name = data.get("name", "").strip()
+        source_type = data.get("source_type", "opencv")
+        camera_index = data.get("camera_index")
+        stream_url = data.get("stream_url", "").strip()
+        
+        if not name:
+            return jsonify({"status": "failed", "error": "Camera name is required"}), 400
+        
+        # Check for duplicate name
+        if cameras_col.find_one({"name": name}):
+            return jsonify({"status": "failed", "error": "Camera name already exists"}), 400
+        
+        # Determine source
+        if source_type == "opencv":
+            if camera_index is None:
+                return jsonify({"status": "failed", "error": "Camera index is required for local cameras"}), 400
+            source = int(camera_index)
+        else:
+            if not stream_url:
+                return jsonify({"status": "failed", "error": "Stream URL is required for IP cameras"}), 400
+            source = stream_url
+        
+        # Create camera ID
+        camera_id = f"cam_{int(datetime.utcnow().timestamp())}_{name.replace(' ', '_')[:20]}"
+        
+        camera_doc = {
+            "_id": camera_id,
+            "name": name,
+            "source_type": source_type,
+            "source": source,
+            "config": {
+                "fps": data.get("fps", 30),
+                "resolution": {
+                    "width": data.get("resolution_width", 640),
+                    "height": data.get("resolution_height", 480)
+                },
+                "enabled": True
+            },
+            "enabled": True,
+            "is_active": False,
+            "created_at": datetime.utcnow(),
+            "created_by": current_user.email,
+            "last_seen": None
+        }
+        
+        cameras_col.insert_one(camera_doc)
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "create_camera",
+            "camera_id": camera_id,
+            "camera_name": name,
+            "performed_by": current_user.email,
+            "timestamp": datetime.utcnow()
+        })
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Camera '{name}' created successfully",
+            "camera_id": camera_id
+        }), 201
+        
+    except Exception as e:
+        print(f"[Create Camera Error] {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+@app.route("/api/superadmin/cameras/<camera_id>/start", methods=["POST"])
+@superadmin_required
+def api_start_camera(camera_id):
+    """Start camera stream"""
+    try:
+        camera = cameras_col.find_one({"_id": camera_id})
+        if not camera:
+            return jsonify({"status": "failed", "error": "Camera not found"}), 404
+        
+        if not camera.get("enabled"):
+            return jsonify({"status": "failed", "error": "Camera is disabled"}), 400
+        
+        if camera_id in active_camera_streams:
+            return jsonify({"status": "success", "message": "Camera already active"}), 200
+        
+        # Start camera in background thread
+        def start_camera_thread():
+            try:
+                source = camera["source"]
+                cap = cv.VideoCapture(source)
+                
+                if not cap.isOpened():
+                    print(f"[Camera {camera_id}] Failed to open source: {source}")
+                    return
+                
+                # Set resolution
+                resolution = camera.get("config", {}).get("resolution", {})
+                if resolution.get("width"):
+                    cap.set(cv.CAP_PROP_FRAME_WIDTH, resolution["width"])
+                if resolution.get("height"):
+                    cap.set(cv.CAP_PROP_FRAME_HEIGHT, resolution["height"])
+                
+                # Store capture object
+                active_camera_streams[camera_id] = {
+                    "capture": cap,
+                    "started_at": datetime.utcnow()
+                }
+                
+                # Update database
+                cameras_col.update_one(
+                    {"_id": camera_id},
+                    {"$set": {"last_seen": datetime.utcnow(), "is_active": True}}
+                )
+                
+                print(f"[Camera {camera_id}] Started successfully")
+                
+            except Exception as e:
+                print(f"[Camera {camera_id}] Start error: {e}")
+        
+        thread = threading.Thread(target=start_camera_thread, daemon=True)
+        thread.start()
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "start_camera",
+            "camera_id": camera_id,
+            "performed_by": current_user.email,
+            "timestamp": datetime.utcnow()
+        })
+        
+        return jsonify({
+            "status": "success",
+            "message": "Camera started successfully"
+        }), 200
+        
+    except Exception as e:
+        print(f"[Start Camera Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+@app.route("/api/superadmin/cameras/<camera_id>/stop", methods=["POST"])
+@superadmin_required
+def api_stop_camera(camera_id):
+    """Stop camera stream"""
+    try:
+        if camera_id not in active_camera_streams:
+            return jsonify({"status": "success", "message": "Camera already stopped"}), 200
+        
+        # Release camera
+        stream_data = active_camera_streams[camera_id]
+        if "capture" in stream_data:
+            stream_data["capture"].release()
+        
+        del active_camera_streams[camera_id]
+        
+        # Update database
+        cameras_col.update_one(
+            {"_id": camera_id},
+            {"$set": {"is_active": False}}
+        )
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "stop_camera",
+            "camera_id": camera_id,
+            "performed_by": current_user.email,
+            "timestamp": datetime.utcnow()
+        })
+        
+        print(f"[Camera {camera_id}] Stopped successfully")
+        
+        return jsonify({
+            "status": "success",
+            "message": "Camera stopped successfully"
+        }), 200
+        
+    except Exception as e:
+        print(f"[Stop Camera Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+@app.route("/api/superadmin/cameras/<camera_id>", methods=["DELETE"])
+@superadmin_required
+def api_delete_camera(camera_id):
+    """Delete camera"""
+    try:
+        # Stop camera if active
+        if camera_id in active_camera_streams:
+            stream_data = active_camera_streams[camera_id]
+            if "capture" in stream_data:
+                stream_data["capture"].release()
+            del active_camera_streams[camera_id]
+        
+        # Delete from database
+        result = cameras_col.delete_one({"_id": camera_id})
+        
+        if result.deleted_count == 0:
+            return jsonify({"status": "failed", "error": "Camera not found"}), 404
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "delete_camera",
+            "camera_id": camera_id,
+            "performed_by": current_user.email,
+            "timestamp": datetime.utcnow()
+        })
+        
+        return jsonify({
+            "status": "success",
+            "message": "Camera deleted successfully"
+        }), 200
+        
+    except Exception as e:
+        print(f"[Delete Camera Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+# ============================================================================
+# CAMERA FEED ENDPOINT
+# ============================================================================
+
+@app.route("/camera_feed/<camera_id>")
+@superadmin_required
+def camera_feed_endpoint(camera_id):
+    """Stream camera feed"""
+    def generate_frames():
+        while camera_id in active_camera_streams:
+            try:
+                stream_data = active_camera_streams[camera_id]
+                cap = stream_data["capture"]
+                
+                success, frame = cap.read()
+                if not success:
+                    print(f"[Camera {camera_id}] Failed to read frame")
+                    break
+                
+                # Encode frame
+                ret, buffer = cv.imencode('.jpg', frame, [cv.IMWRITE_JPEG_QUALITY, 85])
+                if not ret:
+                    continue
+                
+                frame_bytes = buffer.tobytes()
+                
+                # Update last_seen
+                cameras_col.update_one(
+                    {"_id": camera_id},
+                    {"$set": {"last_seen": datetime.utcnow()}}
+                )
+                
+                yield (b'--frame\r\n'
+                       b'Content-Type: image/jpeg\r\n\r\n' + frame_bytes + b'\r\n')
+                
+            except Exception as e:
+                print(f"[Camera {camera_id}] Frame error: {e}")
+                break
+        
+        # Cleanup
+        if camera_id in active_camera_streams:
+            stream_data = active_camera_streams[camera_id]
+            if "capture" in stream_data:
+                stream_data["capture"].release()
+            del active_camera_streams[camera_id]
+    
+    return Response(
+        generate_frames(),
+        mimetype='multipart/x-mixed-replace; boundary=frame'
+    )
+
+
+# ============================================================================
+# ATTENDANCE API - FIXED
+# ============================================================================
+
+@app.route("/api/superadmin/attendance/live")
+@superadmin_required
+def api_live_attendance():
+    """Get live attendance records"""
+    try:
+        limit = int(request.args.get("limit", 10))
+        
+        records = list(
+            attendance_col.find()
+            .sort("timestamp", -1)
+            .limit(limit)
+        )
+        
+        for record in records:
+            record["_id"] = str(record["_id"])
+            if "timestamp" in record and record["timestamp"]:
+                try:
+                    record["timestamp"] = record["timestamp"].isoformat()
+                except:
+                    pass
+        
+        return jsonify({"status": "success", "attendance": records}), 200
+    except Exception as e:
+        print(f"[Live Attendance Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+@app.route("/api/superadmin/attendance/stats")
+@superadmin_required
+def api_attendance_stats():
+    """Get attendance statistics"""
+    try:
+        days = int(request.args.get("days", 7))
+        
+        # Calculate date range
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=days)
+        
+        # Aggregate by day
+        pipeline = [
+            {
+                "$match": {
+                    "timestamp": {
+                        "$gte": start_date,
+                        "$lte": end_date
+                    }
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "format": "%Y-%m-%d",
+                            "date": "$timestamp"
+                        }
+                    },
+                    "count": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"_id": 1}
+            }
+        ]
+        
+        results = list(attendance_col.aggregate(pipeline))
+        
+        # Format response
+        daily_attendance = [
+            {
+                "date": result["_id"],
+                "count": result["count"]
+            }
+            for result in results
+        ]
+        
+        return jsonify({
+            "status": "success",
+            "daily_attendance": daily_attendance
+        }), 200
+        
+    except Exception as e:
+        print(f"[Attendance Stats Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+# ============================================================================
+# ADMIN MANAGEMENT API - FIXED
+# ============================================================================
+
+@app.route("/api/superadmin/admins", methods=["GET"])
+@superadmin_required
+def api_get_admins():
+    """Get all admins"""
+    try:
+        admins = list(admins_col.find({}, {"password_hash": 0}))
+        
+        for admin in admins:
+            admin["_id"] = str(admin["_id"])
+            admin["id"] = admin["_id"]
+            
+            if "created_at" in admin and admin["created_at"]:
+                try:
+                    admin["created_at"] = admin["created_at"].isoformat()
+                except:
+                    admin["created_at"] = None
+            
+            # Ensure required fields
+            admin["name"] = admin.get("name", "Unknown")
+            admin["email"] = admin.get("email", "")
+            admin["department"] = admin.get("department", "")
+            admin["is_active"] = admin.get("is_active", True)
+        
+        return jsonify({"status": "success", "admins": admins}), 200
+    except Exception as e:
+        print(f"[Get Admins Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+@app.route("/api/superadmin/create_admin", methods=["POST"])
+@superadmin_required
+def api_create_admin():
+    """Create new admin"""
+    try:
+        data = request.get_json()
+        
+        name = data.get("name", "").strip()
+        email = data.get("email", "").strip().lower()
+        password = data.get("password", "")
+        department = data.get("department", "").strip()
+        
+        if not all([name, email, password]):
+            return jsonify({
+                "status": "failed",
+                "error": "Name, email and password are required"
+            }), 400
+        
+        # Check if admin exists
+        if admins_col.find_one({"email": email}):
+            return jsonify({
+                "status": "failed",
+                "error": "Admin with this email already exists"
+            }), 400
+        
+        # Create admin
+        admin_id = f"{datetime.utcnow().timestamp()}_{email}"
+        admin_doc = {
+            "_id": admin_id,
+            "name": name,
+            "email": email,
+            "password_hash": generate_password_hash(password),
+            "department": department if department else None,
+            "profile_image": "",
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "created_by": current_user.email
+        }
+        
+        admins_col.insert_one(admin_doc)
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "create_admin",
+            "admin_email": email,
+            "performed_by": current_user.email,
+            "timestamp": datetime.utcnow()
+        })
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Admin '{name}' created successfully"
+        }), 201
+        
+    except Exception as e:
+        print(f"[Create Admin Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+@app.route("/api/superadmin/delete_admin/<admin_id>", methods=["DELETE"])
+@superadmin_required
+def api_delete_admin(admin_id):
+    """Delete admin"""
+    try:
+        result = admins_col.delete_one({"_id": admin_id})
+        
+        if result.deleted_count == 0:
+            return jsonify({"status": "failed", "error": "Admin not found"}), 404
+        
+        # Log action
+        system_logs_col.insert_one({
+            "action": "delete_admin",
+            "admin_id": admin_id,
+            "performed_by": current_user.email,
+            "timestamp": datetime.utcnow()
+        })
+        
+        return jsonify({
+            "status": "success",
+            "message": "Admin deleted successfully"
+        }), 200
+        
+    except Exception as e:
+        print(f"[Delete Admin Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+# ============================================================================
+# USERS API - FIXED
+# ============================================================================
+
+@app.route("/api/superadmin/users", methods=["GET"])
+@superadmin_required
+def api_get_users():
+    """Get all users"""
+    try:
+        users = list(persons_col.find({}))
+        
+        for user in users:
+            user["_id"] = str(user["_id"])
+            user["id"] = user["_id"]
+            
+            if "enrollment_date" in user and user["enrollment_date"]:
+                try:
+                    user["enrollment_date"] = user["enrollment_date"].isoformat()
+                except:
+                    pass
+            
+            if "last_attendance" in user and user["last_attendance"]:
+                try:
+                    user["last_attendance"] = user["last_attendance"].isoformat()
+                except:
+                    pass
+        
+        return jsonify({"status": "success", "users": users}), 200
+    except Exception as e:
+        print(f"[Get Users Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500
+
+
+# ============================================================================
+# LOGS API - FIXED
+# ============================================================================
+
+@app.route("/api/superadmin/logs", methods=["GET"])
+@superadmin_required
+def api_get_logs():
+    """Get system logs"""
+    try:
+        page = int(request.args.get("page", 1))
+        per_page = int(request.args.get("per_page", 50))
+        
+        skip = (page - 1) * per_page
+        
+        logs = list(
+            system_logs_col.find()
+            .sort("timestamp", -1)
+            .skip(skip)
+            .limit(per_page)
+        )
+        
+        total = system_logs_col.count_documents({})
+        
+        for log in logs:
+            log["_id"] = str(log["_id"])
+            if "timestamp" in log and log["timestamp"]:
+                try:
+                    log["timestamp"] = log["timestamp"].isoformat()
+                except:
+                    pass
+        
+        return jsonify({
+            "status": "success",
+            "logs": logs,
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+            "total_pages": (total + per_page - 1) // per_page
+        }), 200
+        
+    except Exception as e:
+        print(f"[Get Logs Error] {e}")
+        return jsonify({"status": "failed", "error": str(e)}), 500                   
 
 # Health check endpoint for Railway
 @app.route("/health")
