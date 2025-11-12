@@ -1,660 +1,1126 @@
-{% extends "base.html" %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin Dashboard - Smart Attendance</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --sa-primary: #9333ea;
+            --sa-primary-dark: #7e22ce;
+            --sa-secondary: #581c87;
+            --sa-accent: #c084fc;
+            --sa-bg: #0f172a;
+            --sa-card-bg: #1e293b;
+            --sa-text: #f1f5f9;
+            --sa-text-light: #94a3b8;
+            --sa-border: #334155;
+            --sa-success: #10b981;
+            --sa-warning: #f59e0b;
+            --sa-danger: #ef4444;
+            --sa-info: #3b82f6;
+        }
 
-{% block title %}Super Admin Dashboard{% endblock %}
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
 
-{% block extra_head %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<script src="https://cdn.tailwindcss.com"></script>
-{% endblock %}
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--sa-bg);
+            color: var(--sa-text);
+            overflow-x: hidden;
+        }
 
-{% block extra_styles %}
-<link rel="stylesheet" href="{{ url_for('static', filename='css/superadmin_dashboard.css') }}">
-<style>
-/* Mobile responsive sidebar */
-@media (max-width: 768px) {
-    .sidebar {
-        transform: translateX(-100%);
-    }
-    .sidebar.mobile-open {
-        transform: translateX(0) !important;
-    }
-    .sa-overlay.active {
-        display: block !important;
-        opacity: 1 !important;
-    }
-    .sa-main-content {
-        margin-left: 0 !important;
-    }
-}
-</style>
-{% endblock %}
+        /* 3D Sidebar */
+        .sidebar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 280px;
+            height: 100vh;
+            background: linear-gradient(180deg, var(--sa-primary) 0%, var(--sa-secondary) 100%);
+            z-index: 1000;
+            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            box-shadow: 5px 0 30px rgba(147, 51, 234, 0.3);
+            overflow-y: auto;
+        }
 
+        .sidebar.collapsed {
+            transform: translateX(-100%) rotateY(15deg);
+            transform-origin: right center;
+        }
 
-{% block content %}
-<!-- Overlay for mobile -->
-<div id="sidebarOverlay" class="sa-overlay"></div>
+        .sidebar-header {
+            padding: 2rem 1.5rem;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            animation: fadeInDown 0.6s ease;
+        }
 
-<div class="dashboard-container">
+        .sidebar-header h1 {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin: 0;
+            background: linear-gradient(135deg, #fff, #c084fc);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar-nav {
+            padding: 1.5rem 1rem;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.25rem;
+            margin-bottom: 0.5rem;
+            color: rgba(255, 255, 255, 0.9);
+            text-decoration: none;
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            position: relative;
+            overflow: hidden;
+            animation: slideInLeft 0.5s ease backwards;
+        }
+
+        .nav-link:nth-child(1) { animation-delay: 0.1s; }
+        .nav-link:nth-child(2) { animation-delay: 0.2s; }
+        .nav-link:nth-child(3) { animation-delay: 0.3s; }
+        .nav-link:nth-child(4) { animation-delay: 0.4s; }
+        .nav-link:nth-child(5) { animation-delay: 0.5s; }
+
+        @keyframes slideInLeft {
+            from {
+                opacity: 0;
+                transform: translateX(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 4px;
+            height: 100%;
+            background: white;
+            transform: translateX(-100%);
+            transition: transform 0.3s;
+        }
+
+        .nav-link:hover, .nav-link.active {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateX(10px);
+        }
+
+        .nav-link:hover::before, .nav-link.active::before {
+            transform: translateX(0);
+        }
+
+        .nav-link i {
+            margin-right: 0.75rem;
+            width: 20px;
+            transition: transform 0.3s;
+        }
+
+        .nav-link:hover i {
+            transform: scale(1.2) rotate(5deg);
+        }
+
+        .logout-btn {
+            background: transparent;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+            color: rgba(255, 255, 255, 0.9);
+            transition: all 0.3s;
+        }
+
+        .logout-btn:hover {
+            background: var(--sa-danger);
+            border-color: var(--sa-danger);
+            transform: translateX(10px);
+        }
+
+        /* Sidebar Overlay */
+        .sidebar-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 999;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s;
+            backdrop-filter: blur(5px);
+        }
+
+        .sidebar-overlay.show {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        /* Main Content */
+        .main-content {
+            margin-left: 280px;
+            transition: margin-left 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            min-height: 100vh;
+        }
+
+        .main-content.expanded {
+            margin-left: 0;
+        }
+
+        /* Topbar */
+        .topbar {
+            background: var(--sa-card-bg);
+            padding: 1.25rem 2rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            animation: slideDown 0.5s ease;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .menu-toggle {
+            background: var(--sa-primary);
+            color: white;
+            border: none;
+            width: 45px;
+            height: 45px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
+        }
+
+        .menu-toggle:hover {
+            transform: scale(1.1) rotate(90deg);
+            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.6);
+        }
+
+        /* Stats Grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1.5rem;
+            padding: 2rem;
+        }
+
+        .stat-card {
+            background: var(--sa-card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+            position: relative;
+            overflow: hidden;
+            animation: fadeInUp 0.6s ease backwards;
+        }
+
+        .stat-card:nth-child(1) { animation-delay: 0.1s; }
+        .stat-card:nth-child(2) { animation-delay: 0.2s; }
+        .stat-card:nth-child(3) { animation-delay: 0.3s; }
+        .stat-card:nth-child(4) { animation-delay: 0.4s; }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: linear-gradient(90deg, var(--sa-primary), var(--sa-accent));
+        }
+
+        .stat-card:hover {
+            transform: translateY(-10px) scale(1.02);
+            box-shadow: 0 12px 40px rgba(147, 51, 234, 0.4);
+        }
+
+        .stat-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .stat-icon {
+            font-size: 2.5rem;
+            opacity: 0.3;
+            transition: all 0.3s;
+        }
+
+        .stat-card:hover .stat-icon {
+            opacity: 0.6;
+            transform: scale(1.1) rotate(10deg);
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--sa-text-light);
+            margin-bottom: 0.5rem;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 800;
+            line-height: 1;
+        }
+
+        .purple { color: var(--sa-primary); }
+        .blue { color: var(--sa-info); }
+        .green { color: var(--sa-success); }
+        .orange { color: var(--sa-warning); }
+
+        /* Camera Section */
+        .content-section {
+            padding: 0 2rem 2rem 2rem;
+        }
+
+        .camera-card {
+            background: var(--sa-card-bg);
+            border-radius: 20px;
+            padding: 2rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            margin-bottom: 2rem;
+            animation: scaleIn 0.5s ease;
+        }
+
+        @keyframes scaleIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        .camera-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+            gap: 1rem;
+        }
+
+        .camera-header h3 {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            font-size: 1.5rem;
+        }
+
+        .live-dot {
+            width: 12px;
+            height: 12px;
+            background: #ef4444;
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+            box-shadow: 0 0 15px #ef4444;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.8); }
+        }
+
+        .camera-btn {
+            background: var(--sa-primary);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .camera-btn:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 25px rgba(147, 51, 234, 0.5);
+        }
+
+        .camera-btn.stop {
+            background: var(--sa-danger);
+        }
+
+        .camera-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 16px;
+            overflow: hidden;
+            min-height: 450px;
+        }
+
+        .camera-placeholder {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 450px;
+            color: var(--sa-text-light);
+        }
+
+        .camera-placeholder i {
+            font-size: 5rem;
+            opacity: 0.3;
+            margin-bottom: 1.5rem;
+        }
+
+        .video-stream {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+
+        .video-overlay {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        /* Real-time Section */
+        .realtime-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 2rem;
+        }
+
+        .realtime-card {
+            background: var(--sa-card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .realtime-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .realtime-header h3 {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1.25rem;
+        }
+
+        .refresh-btn {
+            background: transparent;
+            border: none;
+            color: var(--sa-accent);
+            cursor: pointer;
+            padding: 0.5rem;
+            border-radius: 8px;
+            transition: all 0.3s;
+        }
+
+        .refresh-btn:hover {
+            background: rgba(192, 132, 252, 0.1);
+            transform: rotate(180deg);
+        }
+
+        .attendance-list {
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .attendance-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            background: rgba(147, 51, 234, 0.05);
+            border-radius: 12px;
+            margin-bottom: 0.75rem;
+            transition: all 0.3s;
+        }
+
+        .attendance-item:hover {
+            background: rgba(147, 51, 234, 0.1);
+            transform: translateX(5px);
+        }
+
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: var(--sa-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+        }
+
+        .badge {
+            padding: 0.35rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.75rem;
+            font-weight: 700;
+        }
+
+        .badge-success {
+            background: rgba(16, 185, 129, 0.2);
+            color: var(--sa-success);
+        }
+
+        /* Charts */
+        .chart-container {
+            position: relative;
+            height: 300px;
+            margin-top: 1rem;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--sa-bg);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--sa-primary);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--sa-accent);
+        }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .main-content {
+                margin-left: 0;
+            }
+
+            .realtime-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .stats-grid {
+                grid-template-columns: 1fr;
+                padding: 1rem;
+            }
+
+            .content-section {
+                padding: 0 1rem 1rem 1rem;
+            }
+
+            .topbar {
+                padding: 1rem;
+            }
+
+            .camera-header {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+
+            .camera-container {
+                min-height: 300px;
+            }
+
+            .camera-placeholder {
+                min-height: 300px;
+            }
+
+            .realtime-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .video-overlay {
+                top: 10px;
+                right: 10px;
+                padding: 0.75rem 1rem;
+                font-size: 0.875rem;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .stat-value {
+                font-size: 1.5rem;
+            }
+
+            .camera-card {
+                padding: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Sidebar Overlay -->
+    <div class="sidebar-overlay" id="sidebarOverlay"></div>
+
     <!-- Sidebar -->
-    <aside id="sidebar" class="sa-sidebar">
-        <div class="sa-sidebar-header">
-            <h1>Smart Attendance</h1>
-            <p class="text-sm opacity-80">Super Admin</p>
+    <nav class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <h1><i class="fas fa-shield-alt"></i> Smart Attendance</h1>
+            <p style="opacity: 0.7; font-size: 0.875rem; margin-top: 0.5rem;">Super Admin</p>
         </div>
         
-        <nav class="sa-sidebar-nav">
-            <a href="/superadmin/dashboard" class="sa-nav-link active">
+        <div class="sidebar-nav">
+            <a href="/superadmin/dashboard" class="nav-link active">
                 <i class="fas fa-tachometer-alt"></i> Dashboard
             </a>
-            <a href="/superadmin/cameras" class="sa-nav-link">
+            <a href="/superadmin/cameras" class="nav-link">
                 <i class="fas fa-video"></i> Camera Manager
             </a>
-            <a href="/superadmin/admins" class="sa-nav-link">
+            <a href="/superadmin/admins" class="nav-link">
                 <i class="fas fa-user-shield"></i> Manage Admins
             </a>
-            <a href="/superadmin/users" class="sa-nav-link">
+            <a href="/superadmin/users" class="nav-link">
                 <i class="fas fa-users"></i> All Users
             </a>
-            <a href="/superadmin/logs" class="sa-nav-link">
+            <a href="/superadmin/logs" class="nav-link">
                 <i class="fas fa-clipboard-list"></i> System Logs
             </a>
-            <button onclick="logout()" class="sa-logout-btn">
+            <button onclick="logout()" class="nav-link logout-btn" style="width: 100%; cursor: pointer;">
                 <i class="fas fa-sign-out-alt"></i> Logout
             </button>
-        </nav>
-    </aside>
-    
+        </div>
+    </nav>
+
     <!-- Main Content -->
-    <main class="sa-main-content">
-        <!-- Top Bar -->
-        <div class="sa-topbar">
-            <div class="sa-topbar-left">
-                <button id="menuToggle" class="sa-menu-toggle">
+    <div class="main-content" id="mainContent">
+        <!-- Topbar -->
+        <div class="topbar">
+            <div style="display: flex; align-items: center; gap: 1rem;">
+                <button class="menu-toggle" id="menuToggle">
                     <i class="fas fa-bars"></i>
                 </button>
-                <h2>Dashboard</h2>
+                <h2 style="margin: 0; font-size: 1.5rem;">Dashboard</h2>
             </div>
-            <div id="userInfo" class="sa-user-info"></div>
+            <div id="userInfo" style="text-align: right;">
+                <div style="font-weight: 600;">Super Admin</div>
+                <small style="color: var(--sa-text-light);">Administrator</small>
+            </div>
         </div>
-        
+
         <!-- Stats Grid -->
-        <div class="sa-content">
-            <div class="sa-stats-grid">
-                <div class="sa-stat-card">
-                    <div class="sa-stat-content">
-                        <div class="sa-stat-info">
-                            <p class="sa-stat-label">Total Admins</p>
-                            <p id="totalAdmins" class="sa-stat-value purple">0</p>
-                        </div>
-                        <i class="fas fa-user-shield sa-stat-icon purple"></i>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div>
+                        <div class="stat-label">Total Admins</div>
+                        <div class="stat-value purple" id="totalAdmins">0</div>
                     </div>
-                </div>
-                
-                <div class="sa-stat-card">
-                    <div class="sa-stat-content">
-                        <div class="sa-stat-info">
-                            <p class="sa-stat-label">Total Users</p>
-                            <p id="totalUsers" class="sa-stat-value blue">0</p>
-                        </div>
-                        <i class="fas fa-users sa-stat-icon blue"></i>
-                    </div>
-                </div>
-                
-                <div class="sa-stat-card">
-                    <div class="sa-stat-content">
-                        <div class="sa-stat-info">
-                            <p class="sa-stat-label">Enrolled</p>
-                            <p id="totalPersons" class="sa-stat-value green">0</p>
-                        </div>
-                        <i class="fas fa-id-card sa-stat-icon green"></i>
-                    </div>
-                </div>
-                
-                <div class="sa-stat-card">
-                    <div class="sa-stat-content">
-                        <div class="sa-stat-info">
-                            <p class="sa-stat-label">Today's Attendance</p>
-                            <p id="todayAttendance" class="sa-stat-value orange">0</p>
-                        </div>
-                        <i class="fas fa-calendar-check sa-stat-icon orange"></i>
-                    </div>
+                    <i class="fas fa-user-shield stat-icon purple"></i>
                 </div>
             </div>
-            
-            <!-- Live Attendance Camera Feed -->
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-xl font-bold flex items-center">
+
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div>
+                        <div class="stat-label">Total Users</div>
+                        <div class="stat-value blue" id="totalUsers">0</div>
+                    </div>
+                    <i class="fas fa-users stat-icon blue"></i>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div>
+                        <div class="stat-label">Enrolled Persons</div>
+                        <div class="stat-value green" id="totalPersons">0</div>
+                    </div>
+                    <i class="fas fa-id-card stat-icon green"></i>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <div class="stat-content">
+                    <div>
+                        <div class="stat-label">Today's Attendance</div>
+                        <div class="stat-value orange" id="todayAttendance">0</div>
+                    </div>
+                    <i class="fas fa-calendar-check stat-icon orange"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Live Camera Feed -->
+        <div class="content-section">
+            <div class="camera-card">
+                <div class="camera-header">
+                    <h3>
                         <span class="live-dot"></span>
-                        <i class="fas fa-camera mr-2 text-purple-600"></i>
+                        <i class="fas fa-camera"></i>
                         Live Attendance Camera
                     </h3>
-                    <button id="toggleCamera" onclick="toggleCameraFeed()" class="bg-purple-600 text-white px-4 py-2 rounded-lg hover:bg-purple-700">
-                        <i class="fas fa-play mr-2"></i> Start Camera
+                    <button id="toggleCamera" class="camera-btn" onclick="toggleCameraFeed()">
+                        <i class="fas fa-play"></i>
+                        <span>Start Camera</span>
                     </button>
                 </div>
-                <div class="relative">
-                    <div id="cameraPlaceholder" class="flex items-center justify-center bg-gray-800 rounded-lg" style="min-height: 300px; height: 400px;">
-                        <div class="text-center text-white">
-                            <i class="fas fa-video text-6xl mb-4 opacity-50"></i>
-                            <p class="text-lg">Click "Start Camera" to begin live attendance monitoring</p>
-                            <p class="text-sm mt-2 opacity-75">Real-time face detection with crowd support</p>
+                
+                <div class="camera-container">
+                    <div id="cameraPlaceholder" class="camera-placeholder">
+                        <i class="fas fa-video"></i>
+                        <p style="font-size: 1.125rem; margin-bottom: 0.5rem;">Click "Start Camera" to begin</p>
+                        <p style="font-size: 0.875rem; opacity: 0.7;">Real-time face detection with crowd support</p>
+                    </div>
+                    <div id="videoContainer" style="display: none; position: relative;">
+                        <img id="videoFeed" class="video-stream" src="" alt="Camera Feed">
+                        <div class="video-overlay" id="attendanceOverlay" style="display: none;">
+                            <p style="margin: 0;"><i class="fas fa-users" style="margin-right: 0.5rem;"></i>Watching for attendance...</p>
+                            <p id="detectionCount" style="margin: 0; font-size: 0.75rem; opacity: 0.8;">0 faces detected</p>
                         </div>
-                    </div>
-                    <div id="videoContainer" class="hidden relative bg-black rounded-lg overflow-hidden" style="max-height: 500px;">
-                        <img id="videoFeed" src="" class="w-full h-auto" style="display: block;">
-                    </div>
-                    <div id="attendanceOverlay" class="absolute top-4 right-4 bg-black bg-opacity-75 text-white px-4 py-2 rounded-lg hidden">
-                        <p class="text-sm"><i class="fas fa-users mr-2"></i>Watching for attendance...</p>
-                        <p id="detectionCount" class="text-xs mt-1 opacity-75">0 faces detected</p>
                     </div>
                 </div>
             </div>
-            
-            <!-- Real-time Monitoring Section -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <!-- Live Attendance Tracker -->
-                <div class="bg-white rounded-lg shadow-lg p-6">
-                    <div class="flex items-center justify-between mb-4">
-                        <h3 class="text-xl font-bold flex items-center">
-                            <i class="fas fa-clock mr-2 text-blue-600"></i>
-                            Live Attendance
-                        </h3>
-                        <button onclick="loadLiveAttendance()" class="text-blue-600 hover:text-blue-800">
+
+            <!-- Real-time Monitoring -->
+            <div class="realtime-grid">
+                <!-- Live Attendance -->
+                <div class="realtime-card">
+                    <div class="realtime-header">
+                        <h3><i class="fas fa-clock blue"></i> Live Attendance</h3>
+                        <button class="refresh-btn" onclick="loadLiveAttendance()">
                             <i class="fas fa-sync-alt"></i>
                         </button>
                     </div>
-                    <div id="liveAttendance" class="space-y-3 max-h-96 overflow-y-auto">
-                        <div class="text-center text-gray-500 py-8">Loading...</div>
+                    <div class="attendance-list" id="liveAttendance">
+                        <div style="text-align: center; padding: 2rem; color: var(--sa-text-light);">
+                            Loading...
+                        </div>
                     </div>
                 </div>
-            </div>
-            
-            <!-- Analytics Charts -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <!-- Daily Attendance Chart -->
-                <div class="bg-white rounded-lg shadow-lg p-6">
-                    <h3 class="text-xl font-bold mb-4 flex items-center">
-                        <i class="fas fa-chart-line mr-2 text-blue-600"></i>
-                        Daily Attendance (Last 7 Days)
-                    </h3>
-                    <canvas id="dailyChart" height="250"></canvas>
-                </div>
-                
-                <!-- Weekly Attendance Chart -->
-                <div class="bg-white rounded-lg shadow-lg p-6">
-                    <h3 class="text-xl font-bold mb-4 flex items-center">
-                        <i class="fas fa-chart-bar mr-2 text-green-600"></i>
-                        Weekly Overview
-                    </h3>
-                    <canvas id="weeklyChart" height="250"></canvas>
-                </div>
-            </div>
-            
-            <!-- Monthly Analytics -->
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-                <h3 class="text-xl font-bold mb-4 flex items-center">
-                    <i class="fas fa-chart-area mr-2 text-purple-600"></i>
-                    Monthly Attendance Trends
-                </h3>
-                <canvas id="monthlyChart" height="100"></canvas>
-            </div>
-            
-            <!-- User Attendance Patterns -->
-            <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
-                <h3 class="text-xl font-bold mb-4 flex items-center">
-                    <i class="fas fa-user-check mr-2 text-indigo-600"></i>
-                    User Attendance Patterns
-                </h3>
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-gray-50">
-                            <tr>
-                                <th class="p-3 text-left text-sm font-semibold">User</th>
-                                <th class="p-3 text-left text-sm font-semibold">Department</th>
-                                <th class="p-3 text-left text-sm font-semibold">Total Days</th>
-                                <th class="p-3 text-left text-sm font-semibold">On-Time %</th>
-                                <th class="p-3 text-left text-sm font-semibold">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody id="userPatternsTable" class="divide-y">
-                            <tr><td colspan="5" class="p-4 text-center text-gray-500">Loading...</td></tr>
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-            
-            <!-- Recent System Logs -->
-            <div class="sa-card">
-                <div class="sa-card-header">
-                    <h3 class="sa-card-title">
-                        <i class="fas fa-clipboard-list"></i> Recent System Logs
-                    </h3>
-                </div>
-                <div class="sa-table-container">
-                    <table class="sa-table">
-                        <thead>
-                            <tr>
-                                <th>Time</th>
-                                <th>User</th>
-                                <th>Action</th>
-                                <th class="hide-mobile">Details</th>
-                            </tr>
-                        </thead>
-                        <tbody id="logsTable">
-                            <tr><td colspan="4" class="sa-text-center sa-text-muted">Loading...</td></tr>
-                        </tbody>
-                    </table>
+
+                <!-- Daily Chart -->
+                <div class="realtime-card">
+                    <div class="realtime-header">
+                        <h3><i class="fas fa-chart-line blue"></i> Last 7 Days</h3>
+                    </div>
+                    <div class="chart-container">
+                        <canvas id="dailyChart"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
-    </main>
-</div>
+    </div>
 
+    <script>
+        // Sidebar Toggle
+        const menuToggle = document.getElementById('menuToggle');
+        const sidebar = document.getElementById('sidebar');
+        const mainContent = document.getElementById('mainContent');
+        const sidebarOverlay = document.getElementById('sidebarOverlay');
+        let isMobile = window.innerWidth <= 1024;
 
-<script>
-// Sidebar Toggle
-document.addEventListener('DOMContentLoaded', () => {
-    const sidebar = document.getElementById('sidebar');
-    const menuToggle = document.getElementById('menuToggle');
-    const overlay = document.getElementById('sidebarOverlay');
-    
-    // Toggle sidebar on mobile
-    menuToggle.addEventListener('click', () => {
-        sidebar.classList.toggle('mobile-open');
-        overlay.classList.toggle('active');
-    });
-    
-    // Close sidebar when clicking overlay
-    overlay.addEventListener('click', () => {
-        sidebar.classList.remove('mobile-open');
-        overlay.classList.remove('active');
-    });
-    
-    // Close sidebar on escape key
-    document.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') {
-            sidebar.classList.remove('mobile-open');
-            overlay.classList.remove('active');
+        function toggleSidebar() {
+            sidebar.classList.toggle('active');
+            sidebar.classList.toggle('collapsed');
+            
+            if (isMobile) {
+                sidebarOverlay.classList.toggle('show');
+            } else {
+                mainContent.classList.toggle('expanded');
+            }
         }
-    });
-    
-    // Initialize dashboard
-    initDashboard();
-});
 
-let dailyChart, weeklyChart, monthlyChart;
-let attendanceRefreshInterval;
+        menuToggle.addEventListener('click', toggleSidebar);
+        sidebarOverlay.addEventListener('click', toggleSidebar);
 
-function initDashboard() {
-    loadUserInfo();
-    loadStats();
-    loadLogs();
-    loadLiveAttendance();
-    loadCharts();
-    loadUserPatterns();
-    
-    // Auto-refresh live attendance every 10 seconds
-    attendanceRefreshInterval = setInterval(loadLiveAttendance, 10000);
-}
+        window.addEventListener('resize', () => {
+            const wasMobile = isMobile;
+            isMobile = window.innerWidth <= 1024;
+            
+            if (wasMobile !== isMobile) {
+                sidebar.classList.remove('active', 'collapsed');
+                mainContent.classList.remove('expanded');
+                sidebarOverlay.classList.remove('show');
+            }
+        });
 
-async function loadUserInfo() {
-    try {
-        const response = await fetch('/auth/me');
-        if (response.ok) {
-            const data = await response.json();
-            document.getElementById('userInfo').innerHTML = `
-                <p class="sa-user-name">${data.user.name || 'Super Admin'}</p>
-                <p class="sa-user-email">${data.user.email}</p>
-            `;
+        // Dashboard Data
+        let dailyChart;
+        let cameraFeedActive = false;
+        let videoFeedInterval = null;
+        let attendanceRefreshInterval = null;
+
+        async function initDashboard() {
+            await loadUserInfo();
+            await loadStats();
+            await loadLiveAttendance();
+            await loadCharts();
+            
+            // Auto-refresh live attendance every 10 seconds
+            attendanceRefreshInterval = setInterval(loadLiveAttendance, 10000);
         }
-    } catch (error) {
-        console.error('Error loading user info:', error);
-    }
-}
 
-async function loadStats() {
-    try {
-        const response = await fetch('/superadmin/stats');
-        if (response.ok) {
-            const data = await response.json();
-            document.getElementById('totalAdmins').textContent = data.total_admins || 0;
-            document.getElementById('totalUsers').textContent = data.total_users || 0;
-            document.getElementById('totalPersons').textContent = data.total_persons || 0;
-            document.getElementById('todayAttendance').textContent = data.today_attendance || 0;
+        async function loadUserInfo() {
+            try {
+                const response = await fetch('/auth/me');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('userInfo').innerHTML = `
+                        <div style="font-weight: 600;">${data.user.name || 'Super Admin'}</div>
+                        <small style="color: var(--sa-text-light);">${data.user.email}</small>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading user info:', error);
+            }
         }
-    } catch (error) {
-        console.error('Error loading stats:', error);
-    }
-}
 
-async function loadLiveAttendance() {
-    try {
-        const response = await fetch('/superadmin/attendance/live?limit=10');
-        const data = await response.json();
-        
-        if (response.ok && data.attendance && data.attendance.length > 0) {
-            const html = data.attendance.map(att => {
-                const date = new Date(att.timestamp);
-                const timeAgo = getTimeAgo(date);
+        async function loadStats() {
+            try {
+                const response = await fetch('/superadmin/stats');
+                if (response.ok) {
+                    const data = await response.json();
+                    document.getElementById('totalAdmins').textContent = data.total_admins || 0;
+                    document.getElementById('totalUsers').textContent = data.total_users || 0;
+                    document.getElementById('totalPersons').textContent = data.total_persons || 0;
+                    document.getElementById('todayAttendance').textContent = data.today_attendance || 0;
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadLiveAttendance() {
+            try {
+                const response = await fetch('/superadmin/attendance/live?limit=10');
+                const data = await response.json();
                 
-                return `
-                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition">
-                        <div class="flex items-center gap-3">
-                            <div class="bg-blue-100 p-2 rounded-full">
-                                <i class="fas fa-user text-blue-600"></i>
-                            </div>
-                            <div>
-                                <p class="font-semibold text-gray-800">${att.name}</p>
-                                <p class="text-xs text-gray-500">${timeAgo}</p>
-                            </div>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-sm font-medium text-gray-700">${date.toLocaleTimeString()}</p>
-                            <span class="text-xs px-2 py-1 bg-green-100 text-green-800 rounded">
-                                ${(att.confidence * 100).toFixed(0)}%
-                            </span>
-                        </div>
-                    </div>
-                `;
-            }).join('');
-            
-            document.getElementById('liveAttendance').innerHTML = html;
-        } else {
-            document.getElementById('liveAttendance').innerHTML = `
-                <div class="text-center text-gray-500 py-8">
-                    <i class="fas fa-inbox text-4xl mb-2"></i>
-                    <p>No attendance records today</p>
-                </div>
-            `;
-        }
-    } catch (error) {
-        console.error('Error loading live attendance:', error);
-    }
-}
-
-function getTimeAgo(date) {
-    const seconds = Math.floor((new Date() - date) / 1000);
-    
-    if (seconds < 60) return 'Just now';
-    const minutes = Math.floor(seconds / 60);
-    if (minutes < 60) return `${minutes}m ago`;
-    const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours}h ago`;
-    return date.toLocaleDateString();
-}
-
-async function loadCharts() {
-    try {
-        const response = await fetch('/superadmin/attendance/stats?days=30');
-        const data = await response.json();
-        
-        if (response.ok) {
-            createDailyChart(data.daily_attendance || []);
-            createWeeklyChart(data.daily_attendance || []);
-            createMonthlyChart(data.daily_attendance || []);
-        }
-    } catch (error) {
-        console.error('Error loading charts:', error);
-    }
-}
-
-function createDailyChart(dailyData) {
-    const ctx = document.getElementById('dailyChart').getContext('2d');
-    const last7Days = dailyData.slice(-7);
-    
-    dailyChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: last7Days.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-            datasets: [{
-                label: 'Attendance',
-                data: last7Days.map(d => d.count),
-                borderColor: 'rgb(59, 130, 246)',
-                backgroundColor: 'rgba(59, 130, 246, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        precision: 0
-                    }
-                }
-            }
-        }
-    });
-}
-
-function createWeeklyChart(dailyData) {
-    const ctx = document.getElementById('weeklyChart').getContext('2d');
-    const last7Days = dailyData.slice(-7);
-    
-    weeklyChart = new Chart(ctx, {
-        type: 'bar',
-        data: {
-            labels: last7Days.map(d => new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' })),
-            datasets: [{
-                label: 'Attendance',
-                data: last7Days.map(d => d.count),
-                backgroundColor: 'rgba(34, 197, 94, 0.8)',
-                borderColor: 'rgb(34, 197, 94)',
-                borderWidth: 1
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: false }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        precision: 0
-                    }
-                }
-            }
-        }
-    });
-}
-
-function createMonthlyChart(dailyData) {
-    const ctx = document.getElementById('monthlyChart').getContext('2d');
-    
-    monthlyChart = new Chart(ctx, {
-        type: 'line',
-        data: {
-            labels: dailyData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-            datasets: [{
-                label: 'Daily Attendance',
-                data: dailyData.map(d => d.count),
-                borderColor: 'rgb(168, 85, 247)',
-                backgroundColor: 'rgba(168, 85, 247, 0.1)',
-                tension: 0.4,
-                fill: true
-            }]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            plugins: {
-                legend: { display: true }
-            },
-            scales: {
-                y: {
-                    beginAtZero: true,
-                    ticks: {
-                        precision: 0
-                    }
-                }
-            }
-        }
-    });
-}
-
-async function loadUserPatterns() {
-    try {
-        const response = await fetch('/api/superadmin/users');
-        const data = await response.json();
-        
-        if (response.ok && data.users) {
-            const users = data.users.slice(0, 10); // Show top 10
-            
-            if (users.length > 0) {
-                const html = users.map(user => `
-                    <tr class="hover:bg-gray-50">
-                        <td class="p-3">
-                            <div class="flex items-center gap-2">
-                                <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
-                                    <i class="fas fa-user text-indigo-600 text-sm"></i>
+                if (response.ok && data.attendance && data.attendance.length > 0) {
+                    const html = data.attendance.map(att => {
+                        const date = new Date(att.timestamp);
+                        const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+                        const timeAgo = getTimeAgo(date);
+                        const conf = Math.round(att.confidence * 100);
+                        
+                        return `
+                            <div class="attendance-item">
+                                <div style="display: flex; align-items: center; gap: 1rem;">
+                                    <div class="user-avatar">
+                                        <i class="fas fa-user"></i>
+                                    </div>
+                                    <div>
+                                        <div style="font-weight: 600;">${att.name}</div>
+                                        <div style="font-size: 0.75rem; color: var(--sa-text-light);">${timeAgo}</div>
+                                    </div>
                                 </div>
-                                <span class="font-medium">${user.name}</span>
-                            </div>
-                        </td>
-                        <td class="p-3 text-gray-600">${user.department || 'N/A'}</td>
-                        <td class="p-3 font-medium">-</td>
-                        <td class="p-3">
-                            <div class="flex items-center gap-2">
-                                <div class="w-full bg-gray-200 rounded-full h-2">
-                                    <div class="bg-green-500 h-2 rounded-full" style="width: 85%"></div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">${timeStr}</div>
+                                    <span class="badge badge-success">${conf}%</span>
                                 </div>
-                                <span class="text-sm font-medium">85%</span>
                             </div>
-                        </td>
-                        <td class="p-3">
-                            <span class="px-2 py-1 rounded text-xs font-medium ${user.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
-                                ${user.status || 'Active'}
-                            </span>
-                        </td>
-                    </tr>
-                `).join('');
+                        `;
+                    }).join('');
+                    
+                    document.getElementById('liveAttendance').innerHTML = html;
+                } else {
+                    document.getElementById('liveAttendance').innerHTML = `
+                        <div style="text-align: center; padding: 2rem; color: var(--sa-text-light);">
+                            <i class="fas fa-inbox" style="font-size: 3rem; opacity: 0.3; margin-bottom: 1rem;"></i>
+                            <p>No attendance records today</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error loading live attendance:', error);
+            }
+        }
+
+        function getTimeAgo(date) {
+            const seconds = Math.floor((new Date() - date) / 1000);
+            
+            if (seconds < 60) return 'Just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            return date.toLocaleDateString();
+        }
+
+        async function loadCharts() {
+            try {
+                const response = await fetch('/superadmin/attendance/stats?days=7');
+                const data = await response.json();
                 
-                document.getElementById('userPatternsTable').innerHTML = html;
+                if (response.ok && data.daily_attendance) {
+                    createDailyChart(data.daily_attendance);
+                }
+            } catch (error) {
+                console.error('Error loading charts:', error);
             }
         }
-    } catch (error) {
-        console.error('Error:', error);
-    }
-}
 
-async function loadLogs() {
-    try {
-        const response = await fetch('/api/superadmin/logs?per_page=10');
-        const data = await response.json();
-        
-        if (response.ok && data.logs.length > 0) {
-            const logsHTML = data.logs.map(log => `
-                <tr class="hover:bg-gray-50">
-                    <td class="p-3 text-sm">${new Date(log.timestamp).toLocaleString()}</td>
-                    <td class="p-3 text-sm">${log.user_email}</td>
-                    <td class="p-3 text-sm">
-                        <span class="px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs font-medium">
-                            ${log.action}
-                        </span>
-                    </td>
-                    <td class="p-3 text-sm text-gray-600 hidden md:table-cell">${log.details || ''}</td>
-                </tr>
-            `).join('');
+        function createDailyChart(dailyData) {
+            const ctx = document.getElementById('dailyChart').getContext('2d');
             
-            document.getElementById('logsTable').innerHTML = logsHTML;
-        } else {
-            document.getElementById('logsTable').innerHTML = 
-                '<tr><td colspan="4" class="p-4 text-center text-gray-500">No logs found</td></tr>';
+            if (dailyChart) {
+                dailyChart.destroy();
+            }
+            
+            dailyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: dailyData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
+                    datasets: [{
+                        label: 'Attendance',
+                        data: dailyData.map(d => d.count),
+                        borderColor: '#9333ea',
+                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
+                        tension: 0.4,
+                        fill: true,
+                        pointRadius: 4,
+                        pointBackgroundColor: '#9333ea',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { 
+                            display: false
+                        }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                precision: 0,
+                                color: '#94a3b8'
+                            },
+                            grid: {
+                                color: 'rgba(148, 163, 184, 0.1)'
+                            }
+                        },
+                        x: {
+                            ticks: {
+                                color: '#94a3b8'
+                            },
+                            grid: {
+                                display: false
+                            }
+                        }
+                    }
+                }
+            });
         }
-    } catch (error) {
-        console.error('Error loading logs:', error);
-    }
-}
 
-let cameraFeedActive = false;
-let videoFeedInterval = null;
-
-function toggleCameraFeed() {
-    const videoFeed = document.getElementById('videoFeed');
-    const videoContainer = document.getElementById('videoContainer');
-    const placeholder = document.getElementById('cameraPlaceholder');
-    const overlay = document.getElementById('attendanceOverlay');
-    const toggleBtn = document.getElementById('toggleCamera');
-    
-    if (!cameraFeedActive) {
-        // Start camera feed
-        videoFeed.src = '/video_feed?' + new Date().getTime();
-        videoContainer.classList.remove('hidden');
-        placeholder.classList.add('hidden');
-        overlay.classList.remove('hidden');
-        
-        // Auto-refresh feed to keep it live
-        videoFeedInterval = setInterval(() => {
-            if (cameraFeedActive) {
+        // Camera Feed Functions
+        function toggleCameraFeed() {
+            const videoFeed = document.getElementById('videoFeed');
+            const videoContainer = document.getElementById('videoContainer');
+            const placeholder = document.getElementById('cameraPlaceholder');
+            const overlay = document.getElementById('attendanceOverlay');
+            const toggleBtn = document.getElementById('toggleCamera');
+            
+            if (!cameraFeedActive) {
+                // Start camera feed
                 videoFeed.src = '/video_feed?' + new Date().getTime();
-            }
-        }, 100); // Refresh every 100ms for smooth video
-        
-        toggleBtn.innerHTML = '<i class="fas fa-stop mr-2"></i> Stop Camera';
-        toggleBtn.classList.remove('bg-purple-600', 'hover:bg-purple-700');
-        toggleBtn.classList.add('bg-red-600', 'hover:bg-red-700');
-        cameraFeedActive = true;
-        
-        showToast('Camera feed started - Real-time face detection active', 'success');
-        
-        // Auto-refresh attendance list
-        loadLiveAttendance();
-        setInterval(() => {
-            if (cameraFeedActive) loadLiveAttendance();
-        }, 5000);
-    } else {
-        // Stop camera feed
-        if (videoFeedInterval) {
-            clearInterval(videoFeedInterval);
-            videoFeedInterval = null;
-        }
-        
-        videoFeed.src = '';
-        videoContainer.classList.add('hidden');
-        placeholder.classList.remove('hidden');
-        overlay.classList.add('hidden');
-        
-        toggleBtn.innerHTML = '<i class="fas fa-play mr-2"></i> Start Camera';
-        toggleBtn.classList.remove('bg-red-600', 'hover:bg-red-700');
-        toggleBtn.classList.add('bg-purple-600', 'hover:bg-purple-700');
-        cameraFeedActive = false;
-        
-        showToast('Camera feed stopped', 'info');
-    }
-}
-
-// Handle video feed errors
-document.addEventListener('DOMContentLoaded', () => {
-    const videoFeed = document.getElementById('videoFeed');
-    if (videoFeed) {
-        videoFeed.onerror = function() {
-            if (cameraFeedActive) {
-                console.log('Video feed error, retrying...');
-                setTimeout(() => {
+                videoContainer.style.display = 'block';
+                placeholder.style.display = 'none';
+                overlay.style.display = 'block';
+                
+                // Auto-refresh feed to keep it live
+                videoFeedInterval = setInterval(() => {
                     if (cameraFeedActive) {
                         videoFeed.src = '/video_feed?' + new Date().getTime();
                     }
-                }, 1000);
+                }, 100); // Refresh every 100ms for smooth video
+                
+                toggleBtn.innerHTML = '<i class="fas fa-stop"></i><span>Stop Camera</span>';
+                toggleBtn.classList.add('stop');
+                cameraFeedActive = true;
+                
+                // Auto-refresh attendance list more frequently
+                clearInterval(attendanceRefreshInterval);
+                attendanceRefreshInterval = setInterval(loadLiveAttendance, 5000);
+                
+                showToast('Camera feed started - Real-time face detection active', 'success');
+            } else {
+                // Stop camera feed
+                if (videoFeedInterval) {
+                    clearInterval(videoFeedInterval);
+                    videoFeedInterval = null;
+                }
+                
+                videoFeed.src = '';
+                videoContainer.style.display = 'none';
+                placeholder.style.display = 'flex';
+                overlay.style.display = 'none';
+                
+                toggleBtn.innerHTML = '<i class="fas fa-play"></i><span>Start Camera</span>';
+                toggleBtn.classList.remove('stop');
+                cameraFeedActive = false;
+                
+                // Reset to normal refresh interval
+                clearInterval(attendanceRefreshInterval);
+                attendanceRefreshInterval = setInterval(loadLiveAttendance, 10000);
+                
+                showToast('Camera feed stopped', 'info');
             }
-        };
-    }
-});
+        }
 
-// Cleanup on page unload
-window.addEventListener('beforeunload', () => {
-    if (attendanceRefreshInterval) {
-        clearInterval(attendanceRefreshInterval);
-    }
-});
-</script>
-{% endblock %}
+        // Handle video feed errors
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoFeed = document.getElementById('videoFeed');
+            if (videoFeed) {
+                videoFeed.onerror = function() {
+                    if (cameraFeedActive) {
+                        console.log('Video feed error, retrying...');
+                        setTimeout(() => {
+                            if (cameraFeedActive) {
+                                videoFeed.src = '/video_feed?' + new Date().getTime();
+                            }
+                        }, 1000);
+                    }
+                };
+            }
+            
+            // Initialize dashboard
+            initDashboard();
+        });
+
+        // Toast Notification
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
+                color: white;
+                padding: 1rem 1.5rem;
+                border-radius: 12px;
+                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+                z-index: 10000;
+                animation: slideInRight 0.3s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.style.animation = 'slideOutRight 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Logout
+        async function logout() {
+            try {
+                await fetch('/api/auth/logout', { method: 'POST' });
+                window.location.href = '/logout';
+            } catch (error) {
+                window.location.href = '/logout';
+            }
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (attendanceRefreshInterval) {
+                clearInterval(attendanceRefreshInterval);
+            }
+            if (videoFeedInterval) {
+                clearInterval(videoFeedInterval);
+            }
+        });
+
+        // Add animation styles
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes slideInRight {
+                from {
+                    opacity: 0;
+                    transform: translateX(100px);
+                }
+                to {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+            }
+            @keyframes slideOutRight {
+                from {
+                    opacity: 1;
+                    transform: translateX(0);
+                }
+                to {
+                    opacity: 0;
+                    transform: translateX(100px);
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    </script>
+</body>
+</html>
