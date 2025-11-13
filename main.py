@@ -1187,10 +1187,156 @@ def detect_face_realtime():
             "message": f"Face detection failed: {str(e)}"
         }), 500
 
+@app.route("/test")
+def test_route():
+    """Test route to check server status"""
+    return jsonify({
+        "status": "success",
+        "message": "Server is running",
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+
 @app.route("/attendance")
 def attendance_camera():
-    """Attendance camera page"""
-    return render_template("attendance_camera.html")
+    """Attendance camera page - Public access"""
+    try:
+        # Check if template exists
+        import os
+        template_path = os.path.join(app.template_folder, "attendance_camera.html")
+        if not os.path.exists(template_path):
+            return f"Template not found at: {template_path}", 404
+        
+        return render_template("attendance_camera.html")
+    except Exception as e:
+        print(f"Attendance page error: {e}")
+        import traceback
+        return f"Error loading attendance page: {str(e)}<br><pre>{traceback.format_exc()}</pre>", 500
+
+@app.route("/api/detect_face_public", methods=["POST"])
+def detect_face_public():
+    """Public face detection API for attendance marking"""
+    try:
+        file = request.files.get("frame")
+        if not file:
+            return jsonify({
+                "status": "error", 
+                "message": "No image frame provided"
+            }), 400
+        
+        # Convert uploaded frame to image
+        file_bytes = file.read()
+        img_array = np.frombuffer(file_bytes, np.uint8)
+        image = cv.imdecode(img_array, cv.IMREAD_COLOR)
+        
+        if image is None:
+            return jsonify({
+                "status": "error", 
+                "message": "Invalid image format"
+            }), 400
+
+        # Detect faces using MediaPipe
+        import mediapipe as mp
+        mp_face_detection = mp.solutions.face_detection
+        
+        with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detection:
+            image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+            results = face_detection.process(image_rgb)
+            
+            detected_faces = []
+            
+            if results.detections:
+                for detection in results.detections:
+                    # Get face bounding box
+                    bbox = detection.location_data.relative_bounding_box
+                    h, w, _ = image.shape
+                    
+                    # Convert to pixel coordinates
+                    x = int(bbox.xmin * w)
+                    y = int(bbox.ymin * h)
+                    width = int(bbox.width * w)
+                    height = int(bbox.height * h)
+                    
+                    # Extract face region
+                    face_roi = image[y:y+height, x:x+width]
+                    
+                    if face_roi.size > 0:
+                        try:
+                            # Get face embedding using the existing function
+                            embedding = get_face_embedding(face_roi)
+                            
+                            if embedding is not None:
+                                # Search in FAISS index for match
+                                match_result = search_face_faiss(embedding)
+                                
+                                face_info = {
+                                    "bbox": {"x": x, "y": y, "width": width, "height": height},
+                                    "confidence": float(detection.score[0]),
+                                    "detected": True
+                                }
+                                
+                                if match_result and match_result.get('name') != 'Unknown':
+                                    # Person recognized
+                                    face_info.update({
+                                        "recognized": True,
+                                        "name": match_result['name'],
+                                        "match_confidence": float(match_result.get('confidence', 0)),
+                                        "person_id": str(match_result.get('_id', ''))
+                                    })
+                                    
+                                    # Mark attendance
+                                    try:
+                                        attendance_data = {
+                                            "person_id": match_result.get('_id'),
+                                            "person_name": match_result['name'],
+                                            "timestamp": datetime.datetime.utcnow(),
+                                            "confidence": float(match_result.get('confidence', 0)),
+                                            "method": "Public_Face_Recognition",
+                                            "camera_source": "attendance_page"
+                                        }
+                                        
+                                        # Check if attendance already marked today
+                                        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                                        existing_attendance = attendance_col.find_one({
+                                            "person_id": match_result.get('_id'),
+                                            "timestamp": {"$gte": today_start}
+                                        })
+                                        
+                                        if not existing_attendance:
+                                            attendance_col.insert_one(attendance_data)
+                                            face_info["attendance_marked"] = True
+                                        else:
+                                            face_info["attendance_marked"] = False
+                                            face_info["already_marked"] = True
+                                            
+                                    except Exception as e:
+                                        print(f"Attendance marking error: {e}")
+                                        face_info["attendance_error"] = str(e)
+                                else:
+                                    face_info.update({
+                                        "recognized": False,
+                                        "name": "Unknown",
+                                        "match_confidence": 0.0
+                                    })
+                                
+                                detected_faces.append(face_info)
+                        
+                        except Exception as e:
+                            print(f"Face processing error: {e}")
+                            continue
+            
+            return jsonify({
+                "status": "success",
+                "faces_detected": len(detected_faces),
+                "faces": detected_faces,
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            })
+            
+    except Exception as e:
+        print(f"Face detection API error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Face detection failed: {str(e)}"
+        }), 500
 
 @app.route("/api/mark_attendance", methods=["POST"])
 @admin_required
