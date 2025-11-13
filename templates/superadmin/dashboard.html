@@ -579,56 +579,161 @@
 
         function startFaceDetection() {
             let detectionCounter = 0;
+            let isProcessing = false;
             
-            faceDetectionInterval = setInterval(() => {
+            faceDetectionInterval = setInterval(async () => {
+                if (isProcessing) return;
+                
                 detectionCounter++;
                 
-                // Enhanced face detection simulation
-                const faceCount = Math.random() < 0.7 ? Math.floor(Math.random() * 2) + 1 : 0;
-                document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
-                
-                if (faceCount > 0) {
-                    cameraStats.totalDetections++;
-                    updateCameraStats();
+                try {
+                    // Capture frame from video
+                    const video = document.getElementById('videoFeed');
+                    if (!video || video.videoWidth === 0) return;
                     
-                    // Show detection alert
-                    showFaceDetectionAlert('Face detected - Analyzing...', 'processing');
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0);
                     
-                    document.getElementById('recognitionStatus').textContent = '3D analysis in progress...';
-                    document.getElementById('recognitionStatus').className = 'text-yellow-300 mt-1';
-                    
-                    // Simulate 3D analysis time (1.5-3 seconds)
-                    const analysisTime = 1500 + Math.random() * 1500;
-                    setTimeout(() => {
-                        if (Math.random() > 0.25) { // 75% success rate
-                            const names = ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson', 'Alex Chen', 'Emma Davis'];
-                            const name = names[Math.floor(Math.random() * names.length)];
-                            const confidence = (95 + Math.random() * 4.9).toFixed(1);
+                    // Convert to blob
+                    canvas.toBlob(async (blob) => {
+                        if (isProcessing) return;
+                        isProcessing = true;
+                        
+                        try {
+                            // Send frame to backend for face detection
+                            const formData = new FormData();
+                            formData.append('frame', blob, 'frame.jpg');
                             
-                            document.getElementById('recognitionStatus').textContent = `✓ ${name} (${confidence}%)`;
-                            document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                            const response = await fetch('/api/detect_face', {
+                                method: 'POST',
+                                body: formData
+                            });
                             
-                            showFaceDetectionAlert(`✓ ${name} - Attendance Marked!`, 'success');
-                            showToast(`Attendance marked for ${name} (${confidence}% confidence)`, 'success');
+                            const result = await response.json();
                             
-                            cameraStats.successfulMatches++;
-                            cameraStats.attendanceMarked++;
-                            updateCameraStats();
-                            
-                            // Refresh live attendance data
-                            setTimeout(loadLiveAttendance, 1000);
-                        } else {
-                            document.getElementById('recognitionStatus').textContent = 'Face not recognized - Try again';
-                            document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
-                            showFaceDetectionAlert('Face not recognized - Please face the camera', 'error');
+                            if (result.status === 'success') {
+                                const faceCount = result.faces_detected;
+                                document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
+                                
+                                if (faceCount > 0 && result.faces && result.faces.length > 0) {
+                                    cameraStats.totalDetections++;
+                                    updateCameraStats();
+                                    
+                                    // Process first detected face
+                                    const face = result.faces[0];
+                                    
+                                    if (face.recognized) {
+                                        const confidence = (face.match_confidence * 100).toFixed(1);
+                                        
+                                        document.getElementById('recognitionStatus').textContent = `✓ ${face.name} (${confidence}%)`;
+                                        document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                        
+                                        if (face.attendance_marked) {
+                                            showFaceDetectionAlert(`✓ ${face.name} - Attendance Marked!`, 'success');
+                                            showToast(`Attendance marked for ${face.name} (${confidence}% confidence)`, 'success');
+                                            
+                                            cameraStats.successfulMatches++;
+                                            cameraStats.attendanceMarked++;
+                                            updateCameraStats();
+                                            
+                                            // Add detection effect to video
+                                            video.classList.add('detection-active');
+                                            setTimeout(() => video.classList.remove('detection-active'), 2000);
+                                            
+                                            // Refresh live attendance data
+                                            setTimeout(loadLiveAttendance, 1000);
+                                        } else if (face.already_marked) {
+                                            showFaceDetectionAlert(`${face.name} - Already marked today`, 'info');
+                                            showToast(`${face.name} attendance already marked today`, 'info');
+                                        }
+                                    } else {
+                                        document.getElementById('recognitionStatus').textContent = 'Face not recognized';
+                                        document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
+                                        showFaceDetectionAlert('Face not recognized - Please face the camera', 'error');
+                                    }
+                                    
+                                    // Draw face bounding boxes on canvas overlay
+                                    drawFaceBoundingBoxes(result.faces);
+                                } else {
+                                    document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
+                                    document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                    hideFaceDetectionAlert();
+                                    clearFaceBoundingBoxes();
+                                }
+                            } else {
+                                // API error, fall back to ready state
+                                document.getElementById('faceCount').textContent = '0 faces detected';
+                                document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
+                                document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                console.warn('Face detection API error:', result.message);
+                            }
+                        } catch (error) {
+                            console.error('Face detection request error:', error);
+                            // Don't show error to user for network issues, just continue
+                        } finally {
+                            isProcessing = false;
                         }
-                    }, analysisTime);
-                } else {
-                    document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
-                    document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
-                    hideFaceDetectionAlert();
+                    }, 'image/jpeg', 0.8);
+                    
+                } catch (error) {
+                    console.error('Face detection error:', error);
+                    isProcessing = false;
                 }
-            }, 800 + Math.random() * 400); // Vary detection interval (0.8-1.2 seconds)
+            }, 1500); // Check every 1.5 seconds for real API calls
+        }
+
+        // Function to draw face bounding boxes on overlay canvas
+        function drawFaceBoundingBoxes(faces) {
+            const canvas = document.getElementById('detectionCanvas');
+            const video = document.getElementById('videoFeed');
+            
+            if (!canvas || !video) return;
+            
+            // Resize canvas to match video
+            canvas.width = video.offsetWidth;
+            canvas.height = video.offsetHeight;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate scale factors
+            const scaleX = canvas.width / video.videoWidth;
+            const scaleY = canvas.height / video.videoHeight;
+            
+            faces.forEach(face => {
+                if (face.bbox) {
+                    const x = face.bbox.x * scaleX;
+                    const y = face.bbox.y * scaleY;
+                    const width = face.bbox.width * scaleX;
+                    const height = face.bbox.height * scaleY;
+                    
+                    // Draw bounding box
+                    ctx.strokeStyle = face.recognized ? '#10b981' : '#ef4444'; // green if recognized, red if not
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(x, y, width, height);
+                    
+                    // Draw name label if recognized
+                    if (face.recognized && face.name) {
+                        ctx.fillStyle = face.recognized ? '#10b981' : '#ef4444';
+                        ctx.fillRect(x, y - 30, width, 25);
+                        
+                        ctx.fillStyle = 'white';
+                        ctx.font = '14px Arial';
+                        ctx.fillText(`${face.name} (${(face.match_confidence * 100).toFixed(1)}%)`, x + 5, y - 10);
+                    }
+                }
+            });
+        }
+
+        function clearFaceBoundingBoxes() {
+            const canvas = document.getElementById('detectionCanvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
         }
 
         function showFaceDetectionAlert(message, type) {
@@ -684,26 +789,60 @@
             ctx.drawImage(video, 0, 0);
             
             canvas.toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append('file', blob, 'capture.jpg');
-                
                 try {
-                    showToast('Analyzing captured image with 3D face recognition...', 'info');
+                    showToast('Capturing and analyzing photo...', 'info');
                     
-                    const response = await fetch('/api/analyze_3d_face', {
+                    // First try face detection API
+                    const formData = new FormData();
+                    formData.append('frame', blob, 'capture.jpg');
+                    
+                    const detectResponse = await fetch('/api/detect_face', {
                         method: 'POST',
                         body: formData
                     });
                     
-                    const result = await response.json();
+                    const detectResult = await detectResponse.json();
                     
-                    if (result.status === 'success') {
-                        showToast(`3D Analysis Complete - Quality: ${(result.quality_score * 100).toFixed(1)}%`, 'success');
+                    if (detectResult.status === 'success' && detectResult.faces_detected > 0) {
+                        const face = detectResult.faces[0];
+                        
+                        if (face.recognized) {
+                            const confidence = (face.match_confidence * 100).toFixed(1);
+                            showToast(`✓ Person Identified: ${face.name} (${confidence}% confidence)`, 'success');
+                            
+                            if (face.attendance_marked) {
+                                showToast(`Attendance marked for ${face.name}!`, 'success');
+                                cameraStats.attendanceMarked++;
+                                updateCameraStats();
+                                loadLiveAttendance();
+                            } else if (face.already_marked) {
+                                showToast(`${face.name} attendance already marked today`, 'info');
+                            }
+                        } else {
+                            showToast('Face detected but not recognized in database', 'error');
+                        }
                     } else {
-                        showToast('3D analysis failed: ' + result.msg, 'error');
+                        showToast('No faces detected in captured photo', 'error');
                     }
+                    
+                    // Also run 3D analysis for additional info
+                    const analysisFormData = new FormData();
+                    analysisFormData.append('file', blob, 'capture.jpg');
+                    
+                    const analysisResponse = await fetch('/api/analyze_3d_face', {
+                        method: 'POST',
+                        body: analysisFormData
+                    });
+                    
+                    const analysisResult = await analysisResponse.json();
+                    
+                    if (analysisResult.status === 'success') {
+                        showToast(`3D Analysis - Quality: ${(analysisResult.quality_score * 100).toFixed(1)}% | Landmarks: ${analysisResult.landmarks_count}`, 'info');
+                    }
+                    
                 } catch (error) {
-                    showToast('Error during 3D analysis: ' + error.message, 'error');
+                    console.error('Capture photo error:', error);
+                    showToast('Error during photo analysis: ' + error.message, 'error');
                 }
             }, 'image/jpeg', 0.9);
         }

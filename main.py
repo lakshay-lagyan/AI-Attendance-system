@@ -1058,6 +1058,184 @@ def health_check():
             "timestamp": datetime.datetime.utcnow().isoformat()
         }), 503
 
+# --- Real-time Face Recognition API ---
+@app.route("/api/detect_face", methods=["POST"])
+@admin_required
+def detect_face_realtime():
+    """Real-time face detection and recognition for camera stream"""
+    try:
+        file = request.files.get("frame")
+        if not file:
+            return jsonify({
+                "status": "error", 
+                "message": "No image frame provided"
+            }), 400
+        
+        # Convert uploaded frame to image
+        file_bytes = file.read()
+        img_array = np.frombuffer(file_bytes, np.uint8)
+        image = cv.imdecode(img_array, cv.IMREAD_COLOR)
+        
+        if image is None:
+            return jsonify({
+                "status": "error", 
+                "message": "Invalid image format"
+            }), 400
+
+        # Detect faces using MediaPipe or CV2
+        import mediapipe as mp
+        mp_face_detection = mp.solutions.face_detection
+        mp_drawing = mp.solutions.drawing_utils
+        
+        with mp_face_detection.FaceDetection(model_selection=0, min_detection_confidence=0.5) as face_detection:
+            image_rgb = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+            results = face_detection.process(image_rgb)
+            
+            detected_faces = []
+            
+            if results.detections:
+                for detection in results.detections:
+                    # Get face bounding box
+                    bbox = detection.location_data.relative_bounding_box
+                    h, w, _ = image.shape
+                    
+                    # Convert to pixel coordinates
+                    x = int(bbox.xmin * w)
+                    y = int(bbox.ymin * h)
+                    width = int(bbox.width * w)
+                    height = int(bbox.height * h)
+                    
+                    # Extract face region
+                    face_roi = image[y:y+height, x:x+width]
+                    
+                    if face_roi.size > 0:
+                        try:
+                            # Get face embedding using the existing function
+                            embedding = get_face_embedding(face_roi)
+                            
+                            if embedding is not None:
+                                # Search in FAISS index for match
+                                match_result = search_face_faiss(embedding)
+                                
+                                face_info = {
+                                    "bbox": {"x": x, "y": y, "width": width, "height": height},
+                                    "confidence": float(detection.score[0]),
+                                    "detected": True
+                                }
+                                
+                                if match_result and match_result.get('name') != 'Unknown':
+                                    # Person recognized
+                                    face_info.update({
+                                        "recognized": True,
+                                        "name": match_result['name'],
+                                        "match_confidence": float(match_result.get('confidence', 0)),
+                                        "person_id": str(match_result.get('_id', ''))
+                                    })
+                                    
+                                    # Mark attendance
+                                    try:
+                                        attendance_data = {
+                                            "person_id": match_result.get('_id'),
+                                            "person_name": match_result['name'],
+                                            "timestamp": datetime.datetime.utcnow(),
+                                            "confidence": float(match_result.get('confidence', 0)),
+                                            "method": "3D_Face_Recognition",
+                                            "camera_source": "dashboard_live_camera"
+                                        }
+                                        
+                                        # Check if attendance already marked today
+                                        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                                        existing_attendance = attendance_col.find_one({
+                                            "person_id": match_result.get('_id'),
+                                            "timestamp": {"$gte": today_start}
+                                        })
+                                        
+                                        if not existing_attendance:
+                                            attendance_col.insert_one(attendance_data)
+                                            face_info["attendance_marked"] = True
+                                        else:
+                                            face_info["attendance_marked"] = False
+                                            face_info["already_marked"] = True
+                                            
+                                    except Exception as e:
+                                        print(f"Attendance marking error: {e}")
+                                        face_info["attendance_error"] = str(e)
+                                else:
+                                    face_info.update({
+                                        "recognized": False,
+                                        "name": "Unknown",
+                                        "match_confidence": 0.0
+                                    })
+                                
+                                detected_faces.append(face_info)
+                        
+                        except Exception as e:
+                            print(f"Face processing error: {e}")
+                            continue
+            
+            return jsonify({
+                "status": "success",
+                "faces_detected": len(detected_faces),
+                "faces": detected_faces,
+                "timestamp": datetime.datetime.utcnow().isoformat()
+            })
+            
+    except Exception as e:
+        print(f"Face detection API error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Face detection failed: {str(e)}"
+        }), 500
+
+@app.route("/api/mark_attendance", methods=["POST"])
+@admin_required
+def mark_attendance_api():
+    """API to manually mark attendance"""
+    try:
+        data = request.get_json()
+        person_id = data.get('person_id')
+        person_name = data.get('person_name')
+        
+        if not person_id or not person_name:
+            return jsonify({"status": "error", "message": "Missing person data"}), 400
+        
+        # Check if attendance already marked today
+        today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+        existing_attendance = attendance_col.find_one({
+            "person_id": person_id,
+            "timestamp": {"$gte": today_start}
+        })
+        
+        if existing_attendance:
+            return jsonify({
+                "status": "already_marked",
+                "message": f"Attendance already marked for {person_name} today"
+            })
+        
+        # Mark attendance
+        attendance_data = {
+            "person_id": person_id,
+            "person_name": person_name,
+            "timestamp": datetime.datetime.utcnow(),
+            "confidence": data.get('confidence', 0.95),
+            "method": "Manual_Dashboard",
+            "camera_source": "dashboard_live_camera"
+        }
+        
+        result = attendance_col.insert_one(attendance_data)
+        
+        return jsonify({
+            "status": "success",
+            "message": f"Attendance marked for {person_name}",
+            "attendance_id": str(result.inserted_id)
+        })
+        
+    except Exception as e:
+        return jsonify({
+            "status": "error",
+            "message": f"Failed to mark attendance: {str(e)}"
+        }), 500
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
