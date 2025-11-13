@@ -316,6 +316,9 @@
     </div>
 
     <script>
+        // Dashboard Version 2.0 - Cache Buster
+        console.log('Dashboard v2.0 Loading...');
+        
         // Global variables
         let cameraActive = false;
         let currentStream = null;
@@ -631,6 +634,25 @@
             }
         }
 
+        // Add missing loadLiveAttendance function
+        async function loadLiveAttendance() {
+            try {
+                const response = await fetch('/superadmin/attendance/live?limit=10');
+                const data = await response.json();
+                
+                if (response.ok && data.attendance && data.attendance.length > 0) {
+                    console.log('Live attendance loaded:', data.attendance.length, 'records');
+                    showToast(`Loaded ${data.attendance.length} recent attendance records`, 'success');
+                } else {
+                    console.log('No live attendance data available');
+                    showToast('No recent attendance records found', 'info');
+                }
+            } catch (error) {
+                console.error('Error loading live attendance:', error);
+                showToast('Failed to load live attendance data', 'error');
+            }
+        }
+
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', function(event) {
             const sidebar = document.getElementById('sidebar');
@@ -655,6 +677,32 @@
                 overlay.classList.remove('active');
             }
         });
+
+        // Function availability check - Debug helper
+        window.addEventListener('load', function() {
+            console.log('Dashboard v2.0 Loaded Successfully!');
+            console.log('Functions available:', {
+                toggleSidebar: typeof toggleSidebar,
+                toggleCameraFeed: typeof toggleCameraFeed,
+                switchCamera: typeof switchCamera,
+                capturePhoto: typeof capturePhoto,
+                loadLiveAttendance: typeof loadLiveAttendance,
+                showToast: typeof showToast
+            });
+            
+            // Test toast notification
+            setTimeout(() => {
+                showToast('Dashboard loaded successfully!', 'success');
+            }, 1000);
+        });
+
+        // Make functions globally available (fallback)
+        window.toggleSidebar = toggleSidebar;
+        window.toggleCameraFeed = toggleCameraFeed;
+        window.switchCamera = switchCamera;
+        window.capturePhoto = capturePhoto;
+        window.loadLiveAttendance = loadLiveAttendance;
+        window.showToast = showToast;
     </script>
 </body>
 </html>
