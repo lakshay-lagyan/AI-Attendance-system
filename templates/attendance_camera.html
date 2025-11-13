@@ -215,7 +215,13 @@
         // Check if face recognition system is ready
         async function checkSystemStatus() {
             try {
+                console.log('🔍 Checking system status...');
                 const response = await fetch('/api/system_status');
+                
+                if (!response.ok) {
+                    throw new Error(`Status check failed: ${response.status}`);
+                }
+                
                 const status = await response.json();
                 
                 if (status.status === 'success') {
@@ -443,6 +449,10 @@
                         } catch (error) {  
                             console.error('Ultra detection error:', error);
                             
+                            // Show specific error information
+                            let errorDetail = error.message || 'Unknown error';
+                            console.log(`❌ Ultra detection failed: ${errorDetail}`);
+                            
                             // Fallback to regular detection API
                             try {
                                 console.log('🔄 Falling back to regular detection...');
@@ -500,7 +510,20 @@
                                 }
                             } catch (fallbackError) {
                                 console.error('Fallback detection error:', fallbackError);
-                                showToast('Face detection system unavailable', 'error');
+                                
+                                // Show detailed error message
+                                let errorMsg = 'Face detection system unavailable';
+                                if (fallbackError.message.includes('500')) {
+                                    errorMsg = 'Server error - please check system status';
+                                } else if (fallbackError.message.includes('404')) {
+                                    errorMsg = 'Face detection API not found';
+                                } else if (fallbackError.message.includes('network') || fallbackError.message.includes('fetch')) {
+                                    errorMsg = 'Network connection error';
+                                }
+                                
+                                showToast(errorMsg, 'error');
+                                document.getElementById('recognitionStatus').textContent = errorMsg;
+                                document.getElementById('recognitionStatus').className = 'text-red-400 mt-1';
                             }
                         } finally {
                             isProcessing = false;
