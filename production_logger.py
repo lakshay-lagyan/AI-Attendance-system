@@ -1,7 +1,3 @@
-"""
-Production-Grade Logging System
-Tracks all errors, performance metrics, and system events
-"""
 import logging
 import os
 from logging.handlers import RotatingFileHandler, TimedRotatingFileHandler

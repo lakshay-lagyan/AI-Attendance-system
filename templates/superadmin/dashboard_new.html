@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Super Admin Dashboard - Smart Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-hover:hover { transform: translateY(-2px); transition: all 0.3s ease; }
+        .stat-card { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .stat-card-2 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .stat-card-3 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .stat-card-4 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navigation -->
+    <nav class="gradient-bg shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <i class="fas fa-shield-alt text-white text-2xl mr-3"></i>
+                    <h1 class="text-white text-xl font-bold">Super Admin Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-white">
+                        <i class="fas fa-user-circle mr-2"></i>
+                        {{ superadmin.name or superadmin.email }}
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Logout
+                    </a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="flex">
+        <!-- Sidebar -->
+        <div class="w-64 bg-white shadow-lg min-h-screen">
+            <div class="p-6">
+                <nav class="space-y-2">
+                    <a href="{{ url_for('superadmin.dashboard') }}" class="flex items-center px-4 py-3 text-gray-700 bg-blue-50 rounded-lg">
+                        <i class="fas fa-tachometer-alt mr-3"></i>Dashboard
+                    </a>
+                    <a href="{{ url_for('superadmin.admins') }}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-users-cog mr-3"></i>Manage Admins
+                    </a>
+                    <a href="{{ url_for('superadmin.cameras') }}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-video mr-3"></i>Camera Manager
+                    </a>
+                    <a href="/superadmin/users" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-users mr-3"></i>Users
+                    </a>
+                    <a href="/superadmin/logs" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-file-alt mr-3"></i>System Logs
+                    </a>
+                </nav>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="flex-1 p-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Total Admins</p>
+                            <p class="text-3xl font-bold" id="total-admins">{{ stats.total_admins or 0 }}</p>
+                        </div>
+                        <i class="fas fa-users-cog text-4xl text-white/60"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card-2 rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Total Users</p>
+                            <p class="text-3xl font-bold" id="total-users">{{ stats.total_users or 0 }}</p>
+                        </div>
+                        <i class="fas fa-users text-4xl text-white/60"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card-3 rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Active Cameras</p>
+                            <p class="text-3xl font-bold" id="active-cameras">{{ stats.active_cameras or 0 }}</p>
+                        </div>
+                        <i class="fas fa-video text-4xl text-white/60"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card-4 rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Pending Requests</p>
+                            <p class="text-3xl font-bold" id="pending-requests">{{ stats.pending_requests or 0 }}</p>
+                        </div>
+                        <i class="fas fa-clock text-4xl text-white/60"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts and Tables -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- Attendance Chart -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-chart-line mr-2 text-blue-500"></i>Attendance Trends
+                    </h3>
+                    <canvas id="attendanceChart" height="300"></canvas>
+                </div>
+
+                <!-- System Health -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-heartbeat mr-2 text-green-500"></i>System Health
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">Database Status</span>
+                            <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                                <i class="fas fa-check-circle mr-1"></i>Healthy
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">FAISS Index</span>
+                            <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm" id="faiss-status">
+                                <i class="fas fa-check-circle mr-1"></i>Active
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">Camera System</span>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm" id="camera-status">
+                                <i class="fas fa-info-circle mr-1"></i>Monitoring
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-clock mr-2 text-purple-500"></i>Recent Activity
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-activity" class="bg-white divide-y divide-gray-200">
+                            <!-- Activity will be loaded here -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadAttendanceChart();
+            loadRecentActivity();
+            
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                loadStats();
+                loadRecentActivity();
+            }, 30000);
+        });
+
+        async function loadStats() {
+            try {
+                const response = await fetch('/superadmin/api/stats');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('total-admins').textContent = data.total_admins || 0;
+                    document.getElementById('total-users').textContent = data.total_users || 0;
+                    document.getElementById('active-cameras').textContent = data.active_cameras || 0;
+                    document.getElementById('pending-requests').textContent = data.pending_enrollments || 0;
+                    
+                    // Update system health
+                    const faissSizeElement = document.getElementById('faiss-status');
+                    if (data.faiss_index_size > 0) {
+                        faissSizeElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active (' + data.faiss_index_size + ')';
+                        faissSizeElement.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm';
+                    } else {
+                        faissSizeElement.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Empty';
+                        faissSizeElement.className = 'px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm';
+                    }
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+            }
+        }
+
+        async function loadAttendanceChart() {
+            try {
+                const response = await fetch('/api/superadmin/attendance/stats?days=7');
+                const data = await response.json();
+                
+                if (response.ok && data.daily_attendance) {
+                    const ctx = document.getElementById('attendanceChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.daily_attendance.map(d => new Date(d.date).toLocaleDateString()),
+                            datasets: [{
+                                label: 'Daily Attendance',
+                                data: data.daily_attendance.map(d => d.count),
+                                borderColor: 'rgb(59, 130, 246)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading attendance chart:', error);
+            }
+        }
+
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/superadmin/logs?limit=10');
+                const data = await response.json();
+                
+                if (response.ok && data.logs) {
+                    const tbody = document.getElementById('recent-activity');
+                    tbody.innerHTML = data.logs.map(log => `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${new Date(log.timestamp).toLocaleString()}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${log.action || 'Unknown'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${log.user || log.performed_by || 'System'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                    log.status === 'success' ? 'bg-green-100 text-green-800' : 
+                                    log.status === 'error' ? 'bg-red-100 text-red-800' : 
+                                    'bg-blue-100 text-blue-800'
+                                }">
+                                    ${log.status || 'info'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+            }
+        }
+    </script>
+</body>
+</html>

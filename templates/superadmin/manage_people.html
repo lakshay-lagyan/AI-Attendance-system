@@ -549,16 +549,15 @@ async function loadAllPeople() {
         const container = document.getElementById('peopleContainer');
         container.innerHTML = '<div class="loading"><i class="fas fa-spinner"></i><p>Loading...</p></div>';
         
-        // Load both users and admins
-        const [usersResp, adminsResp] = await Promise.all([
-            apiRequest('/api/superadmin/users'),
+        // Load admins
+        const adminsResp = await Promise.all([
             apiRequest('/api/superadmin/admins')
         ]);
         
-        const usersData = await usersResp.json();
+        // const usersData = await usersResp.json();
         const adminsData = await adminsResp.json();
         
-        const users = usersData.users || [];
+        // const users = usersData.users || [];
         const admins = adminsData.admins || [];
         
         // Merge and mark roles
