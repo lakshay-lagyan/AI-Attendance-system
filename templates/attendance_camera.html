@@ -385,7 +385,7 @@
                             const formData = new FormData();
                             formData.append('frame', blob, 'frame.jpg');
                             
-                            const response = await fetch('/api/detect_face_public', {
+                            const response = await fetch('/api/detect_face_ultra', {
                                 method: 'POST',
                                 body: formData
                             });

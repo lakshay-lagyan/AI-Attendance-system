@@ -1261,6 +1261,166 @@ def attendance_camera():
         import traceback
         return f"Error loading attendance page: {str(e)}<br><pre>{traceback.format_exc()}</pre>", 500
 
+@app.route("/api/detect_face_ultra", methods=["POST"])
+def detect_face_ultra():
+    """Ultra-advanced face detection with state-of-the-art capabilities"""
+    try:
+        from ultra_face_recognition import process_frame_ultra, ultra_recognizer
+        
+        file = request.files.get("frame")
+        if not file:
+            return jsonify({
+                "status": "error", 
+                "message": "No image frame provided"
+            }), 400
+        
+        # Convert uploaded frame to image
+        file_bytes = file.read()
+        img_array = np.frombuffer(file_bytes, np.uint8)
+        image = cv.imdecode(img_array, cv.IMREAD_COLOR)
+        
+        if image is None:
+            return jsonify({
+                "status": "error", 
+                "message": "Invalid image format"
+            }), 400
+
+        print(f"🔬 Ultra-processing frame: {image.shape}")
+        
+        # Process with ultra-advanced system
+        enhanced_faces = process_frame_ultra(image)
+        
+        # Match each detected face against database
+        final_results = []
+        
+        for face in enhanced_faces:
+            if face.get('embedding') is not None:
+                print(f"🧠 Processing face {face.get('face_id', 'unknown')}: {face.get('description', '')}")
+                
+                # Search in FAISS database
+                match_result = search_face_faiss(face['embedding'], image=image)
+                
+                face_result = {
+                    "bbox": {"x": face['bbox'][0], "y": face['bbox'][1], 
+                            "width": face['bbox'][2], "height": face['bbox'][3]},
+                    "confidence": float(face['confidence']),
+                    "detected": True,
+                    "face_id": face.get('face_id', 0),
+                    "quality": face['quality'],
+                    "pose": face.get('pose', {}),
+                    "stability": face.get('stability', 0.0),
+                    "description": face.get('description', ''),
+                    "tracking_info": {
+                        "tracked": face.get('face_id') is not None,
+                        "stability_score": face.get('stability', 0.0)
+                    }
+                }
+                
+                if match_result and isinstance(match_result, dict) and match_result.get('name') != 'Unknown':
+                    print(f"✨ Ultra-recognition: {match_result['name']} (confidence: {match_result.get('confidence', 0):.3f})")
+                    
+                    # Person recognized
+                    face_result.update({
+                        "recognized": True,
+                        "name": match_result['name'],
+                        "match_confidence": float(match_result.get('confidence', 0)),
+                        "person_id": str(match_result.get('_id', ''))
+                    })
+                    
+                    # Enhanced attendance marking with quality checks
+                    try:
+                        print("📝 Ultra-attendance marking...")
+                        
+                        # Only mark if quality is sufficient
+                        if face['quality']['overall'] > 0.4 and face.get('stability', 0) > 0.3:
+                            person = persons_col.find_one({"name": match_result['name']})
+                            person_id = person.get('_id') if person else None
+                            
+                            if person_id:
+                                attendance_data = {
+                                    "person_id": person_id,
+                                    "person_name": match_result['name'],
+                                    "timestamp": datetime.datetime.utcnow(),
+                                    "confidence": float(match_result.get('confidence', 0)),
+                                    "method": "Ultra_Face_Recognition",
+                                    "camera_source": "ultra_attendance_camera",
+                                    "quality_metrics": face['quality'],
+                                    "pose_info": face.get('pose', {}),
+                                    "stability_score": face.get('stability', 0.0),
+                                    "detection_confidence": float(face['confidence']),
+                                    "face_description": face.get('description', '')
+                                }
+                                
+                                # Check if attendance already marked today
+                                today_start = datetime.datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+                                existing_attendance = attendance_col.find_one({
+                                    "person_id": person_id,
+                                    "timestamp": {"$gte": today_start}
+                                })
+                                
+                                if not existing_attendance:
+                                    result = attendance_col.insert_one(attendance_data)
+                                    face_result["attendance_marked"] = True
+                                    face_result["attendance_id"] = str(result.inserted_id)
+                                    print(f"✅ Ultra-attendance marked: {match_result['name']}")
+                                else:
+                                    face_result["attendance_marked"] = False
+                                    face_result["already_marked"] = True
+                                    face_result["existing_time"] = existing_attendance['timestamp'].isoformat()
+                            else:
+                                face_result["attendance_error"] = "Person not found in database"
+                        else:
+                            face_result["attendance_marked"] = False
+                            face_result["quality_insufficient"] = True
+                            face_result["quality_reason"] = f"Quality: {face['quality']['overall']:.2f}, Stability: {face.get('stability', 0):.2f}"
+                            
+                    except Exception as e:
+                        print(f"❌ Ultra-attendance error: {e}")
+                        face_result["attendance_error"] = str(e)
+                else:
+                    print(f"❓ Face not recognized in ultra-database")
+                    face_result.update({
+                        "recognized": False,
+                        "name": "Unknown",
+                        "match_confidence": 0.0,
+                        "reason": "No match in ultra-database"
+                    })
+                
+                final_results.append(face_result)
+            else:
+                print("⚠️ No embedding generated for face")
+        
+        # Ultra-enhanced response
+        response_data = {
+            "status": "success",
+            "faces_detected": len(final_results),
+            "faces": final_results,
+            "timestamp": datetime.datetime.utcnow().isoformat(),
+            "ultra_processing": {
+                "image_enhanced": True,
+                "multi_scale_detection": True,
+                "pose_analysis": True,
+                "quality_assessment": True,
+                "face_tracking": True,
+                "total_faces": len(final_results),
+                "recognized_faces": len([f for f in final_results if f.get("recognized", False)]),
+                "high_quality_faces": len([f for f in final_results if f.get("quality", {}).get("overall", 0) > 0.6])
+            }
+        }
+        
+        print(f"🎯 Ultra-result: {len(final_results)} faces, {len([f for f in final_results if f.get('recognized', False)])} recognized")
+        return jsonify(response_data)
+        
+    except Exception as e:
+        print(f"💥 Ultra-detection error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "status": "error",
+            "message": f"Ultra-detection failed: {str(e)}",
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }), 500
+
 @app.route("/api/detect_face_public", methods=["POST"])
 def detect_face_public():
     """Enhanced face detection and recognition API with full model integration"""
