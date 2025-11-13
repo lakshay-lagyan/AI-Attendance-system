@@ -209,7 +209,34 @@
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
             showToast('Face Recognition Attendance System Ready', 'info');
+            checkSystemStatus();
         });
+
+        // Check if face recognition system is ready
+        async function checkSystemStatus() {
+            try {
+                const response = await fetch('/api/system_status');
+                const status = await response.json();
+                
+                if (status.status === 'success') {
+                    const fr = status.face_recognition;
+                    const db = status.database;
+                    
+                    if (fr.faiss_loaded && fr.total_persons > 0) {
+                        showToast(`System Ready: ${fr.total_persons} persons in database`, 'success');
+                    } else {
+                        showToast('Warning: No face recognition data loaded', 'error');
+                    }
+                    
+                    console.log('System Status:', status);
+                } else {
+                    showToast('System check failed', 'error');
+                }
+            } catch (error) {
+                console.error('System status error:', error);
+                showToast('Unable to verify system status', 'error');
+            }
+        }
 
         // Toggle camera function
         window.toggleCamera = async function() {
