@@ -1261,11 +1261,30 @@ def attendance_camera():
         import traceback
         return f"Error loading attendance page: {str(e)}<br><pre>{traceback.format_exc()}</pre>", 500
 
+@app.route("/api/detect_face_ultra_test", methods=["GET", "POST"])
+def detect_face_ultra_test():
+    """Test endpoint for ultra detection"""
+    return jsonify({
+        "status": "success",
+        "message": "Ultra detection endpoint is working",
+        "method": request.method,
+        "timestamp": datetime.datetime.utcnow().isoformat()
+    })
+
 @app.route("/api/detect_face_ultra", methods=["POST"])
 def detect_face_ultra():
     """Ultra-advanced face detection with state-of-the-art capabilities"""
     try:
-        from ultra_face_recognition import process_frame_ultra, ultra_recognizer
+        # Test if ultra recognition module can be imported
+        try:
+            from ultra_face_recognition import process_frame_ultra, ultra_recognizer
+            print("✅ Ultra face recognition module imported successfully")
+        except ImportError as ie:
+            print(f"❌ Import error: {ie}")
+            return jsonify({
+                "status": "error",
+                "message": f"Ultra recognition module not available: {str(ie)}"
+            }), 500
         
         file = request.files.get("frame")
         if not file:

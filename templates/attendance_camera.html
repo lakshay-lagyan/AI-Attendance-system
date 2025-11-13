@@ -390,6 +390,10 @@
                                 body: formData
                             });
                             
+                            if (!response.ok) {
+                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            }
+                            
                             const result = await response.json();
                             
                             if (result.status === 'success') {
@@ -436,8 +440,68 @@
                                     clearCanvas();
                                 }
                             }
-                        } catch (error) {
-                            console.error('Detection error:', error);
+                        } catch (error) {  
+                            console.error('Ultra detection error:', error);
+                            
+                            // Fallback to regular detection API
+                            try {
+                                console.log('🔄 Falling back to regular detection...');
+                                const fallbackResponse = await fetch('/api/detect_face_public', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                
+                                if (fallbackResponse.ok) {
+                                    const fallbackResult = await fallbackResponse.json();
+                                    console.log('✅ Fallback detection successful');
+                                    
+                                    // Process fallback result same as ultra result
+                                    if (fallbackResult.status === 'success') {
+                                        const faceCount = fallbackResult.faces_detected;
+                                        document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
+                                        
+                                        if (faceCount > 0 && fallbackResult.faces && fallbackResult.faces.length > 0) {
+                                            const face = fallbackResult.faces[0];
+                                            
+                                            if (face.recognized) {
+                                                sessionStats.successfulScans++;
+                                                updateStats();
+                                                
+                                                const confidence = (face.match_confidence * 100).toFixed(1);
+                                                
+                                                document.getElementById('recognitionStatus').textContent = `${face.name} (${confidence}%)`;
+                                                document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                                
+                                                if (face.attendance_marked) {
+                                                    sessionStats.attendanceCount++;
+                                                    updateStats();
+                                                    
+                                                    showSuccessAlert(`Welcome ${face.name}! Attendance marked successfully.`);
+                                                    showToast(`Attendance marked for ${face.name}`, 'success');
+                                                    
+                                                    // Add success effect
+                                                    video.classList.add('detection-active');
+                                                    setTimeout(() => video.classList.remove('detection-active'), 3000);
+                                                } else if (face.already_marked) {
+                                                    showSuccessAlert(`Hello ${face.name}! Your attendance was already marked today.`);
+                                                    showToast(`${face.name} - Already marked today`, 'info');
+                                                }
+                                                
+                                                drawFaceBoundingBox([face], true);
+                                            } else {
+                                                document.getElementById('recognitionStatus').textContent = 'Face not recognized';
+                                                document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
+                                                drawFaceBoundingBox([face], false);
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    throw new Error('Fallback detection also failed');
+                                }
+                            } catch (fallbackError) {
+                                console.error('Fallback detection error:', fallbackError);
+                                showToast('Face detection system unavailable', 'error');
+                            }
                         } finally {
                             isProcessing = false;
                         }
