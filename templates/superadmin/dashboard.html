@@ -76,6 +76,11 @@
             animation: detectPulse 2s infinite;
         }
         
+        .camera-height {
+            min-height: 280px;
+            max-height: 500px;
+        }
+        
         @keyframes pulse {
             0%, 100% { opacity: 1; }
             50% { opacity: 0.5; }
@@ -224,7 +229,7 @@
                     </div>
                 </div>
                 
-                <div class="relative bg-gradient-to-br from-gray-900 to-purple-900 rounded-xl overflow-hidden" style="min-height: 280px; max-height: 500px;">
+                <div class="relative bg-gradient-to-br from-gray-900 to-purple-900 rounded-xl overflow-hidden camera-height">
                     <!-- Camera Placeholder -->
                     <div id="cameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-white p-4 sm:p-8">
                         <div class="text-center">
@@ -355,16 +360,16 @@
         </div>
     </div>
 
-    <script>
-        // Dashboard Version 2.0 - Cache Buster
-        console.log('Dashboard v2.0 Loading...');
+    <script type="text/javascript">
+        // Dashboard Version 3.0 - Fixed Syntax
+        console.log('Dashboard v3.0 Loading...');
         
-        // Global variables
-        let cameraActive = false;
-        let currentStream = null;
-        let availableCameras = [];
-        let currentCameraIndex = 0;
-        let faceDetectionInterval = null;
+        // Global variables - No duplicates
+        var cameraActive = false;
+        var currentStream = null;
+        var availableCameras = [];
+        var currentCameraIndex = 0;
+        var faceDetectionInterval = null;
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
@@ -403,14 +408,15 @@
         }
 
         // Enhanced Camera System with Mobile Support
-        let cameraStats = {
+        var cameraStats = {
             totalDetections: 0,
             successfulMatches: 0,
             attendanceMarked: 0,
             startTime: null
         };
 
-        async function toggleCameraFeed() {
+        // Make all functions global immediately
+        window.toggleCameraFeed = async function() {
             const toggleBtn = document.getElementById('toggleCamera');
             const switchBtn = document.getElementById('switchCamera');
             const captureBtn = document.getElementById('capturePhoto');
@@ -476,9 +482,9 @@
                 cameraActive = false;
                 showToast('Camera stopped', 'info');
             }
-        }
+        };
 
-        function showLoading(show) {
+        window.showLoading = function(show) {
             const loadingIndicator = document.getElementById('cameraLoading');
             if (show) {
                 loadingIndicator.classList.remove('hidden');
@@ -557,7 +563,7 @@
             }
         }
 
-        async function switchCamera() {
+        window.switchCamera = async function() {
             if (availableCameras.length <= 1) {
                 showToast('No additional cameras available', 'info');
                 return;
@@ -575,9 +581,9 @@
             }
             
             showToast(`Switched to camera ${currentCameraIndex + 1} of ${availableCameras.length}`, 'success');
-        }
+        };
 
-        function startFaceDetection() {
+        window.startFaceDetection = function() {
             let detectionCounter = 0;
             let isProcessing = false;
             
@@ -683,7 +689,7 @@
                     isProcessing = false;
                 }
             }, 1500); // Check every 1.5 seconds for real API calls
-        }
+        };
 
         // Function to draw face bounding boxes on overlay canvas
         function drawFaceBoundingBoxes(faces) {
@@ -779,7 +785,7 @@
             document.getElementById('attendanceMarked').textContent = cameraStats.attendanceMarked;
         }
 
-        async function capturePhoto() {
+        window.capturePhoto = async function() {
             const video = document.getElementById('videoFeed');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -845,9 +851,9 @@
                     showToast('Error during photo analysis: ' + error.message, 'error');
                 }
             }, 'image/jpeg', 0.9);
-        }
+        };
 
-        async function loadStats() {
+        window.loadStats = async function() {
             try {
                 const response = await fetch('/superadmin/api/stats');
                 const data = await response.json();
@@ -872,9 +878,9 @@
                 console.error('Error loading stats:', error);
                 showToast('Failed to load statistics', 'error');
             }
-        }
+        };
 
-        async function loadAttendanceChart() {
+        window.loadAttendanceChart = async function() {
             try {
                 const response = await fetch('/api/superadmin/attendance/stats?days=7');
                 const data = await response.json();
@@ -951,7 +957,7 @@
         }
 
         // Add missing loadLiveAttendance function
-        async function loadLiveAttendance() {
+        window.loadLiveAttendance = async function() {
             try {
                 const response = await fetch('/superadmin/attendance/live?limit=10');
                 const data = await response.json();
@@ -967,7 +973,27 @@
                 console.error('Error loading live attendance:', error);
                 showToast('Failed to load live attendance data', 'error');
             }
-        }
+        };
+
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        };
+
+        window.showToast = function(message, type) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type || 'info'}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        };
 
         // Close sidebar when clicking outside on mobile
         document.addEventListener('click', function(event) {
