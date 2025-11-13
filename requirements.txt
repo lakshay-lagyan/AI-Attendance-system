@@ -22,6 +22,7 @@ mtcnn==0.1.1
 numpy==1.24.3
 faiss-cpu==1.7.4
 scikit-learn==1.3.2
+scipy==1.11.4
 
 # Image Processing
 Pillow==10.1.0

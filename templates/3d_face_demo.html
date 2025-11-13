@@ -1,0 +1,427 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Face Reconstruction Demo - Smart Attendance</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        .feature-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            transition: transform 0.3s ease;
+        }
+        .feature-card:hover {
+            transform: translateY(-5px);
+        }
+        .analysis-result {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+        }
+        .comparison-result {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen">
+    <!-- Header -->
+    <header class="bg-gray-800 shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-cube text-3xl text-blue-400"></i>
+                    <h1 class="text-2xl font-bold">3D Face Reconstruction Demo</h1>
+                </div>
+                <nav class="flex space-x-4">
+                    <a href="/admin/dashboard" class="px-4 py-2 bg-blue-600 rounded-lg hover:bg-blue-700 transition">
+                        <i class="fas fa-arrow-left mr-2"></i>Back to Dashboard
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <div class="container mx-auto px-6 py-8">
+        <!-- Introduction -->
+        <div class="mb-8 text-center">
+            <h2 class="text-4xl font-bold mb-4">Advanced 3D Face Analysis</h2>
+            <p class="text-xl text-gray-300 max-w-3xl mx-auto">
+                Experience cutting-edge 3D face reconstruction technology that analyzes facial landmarks, 
+                measures geometric features, and provides enhanced recognition accuracy.
+            </p>
+        </div>
+
+        <!-- Features Grid -->
+        <div class="grid md:grid-cols-3 gap-6 mb-12">
+            <div class="feature-card rounded-xl p-6 text-center">
+                <i class="fas fa-eye text-4xl mb-4"></i>
+                <h3 class="text-xl font-bold mb-2">468 Landmarks</h3>
+                <p class="text-gray-200">Precise 3D facial landmark detection using MediaPipe</p>
+            </div>
+            <div class="feature-card rounded-xl p-6 text-center">
+                <i class="fas fa-ruler text-4xl mb-4"></i>
+                <h3 class="text-xl font-bold mb-2">Geometric Analysis</h3>
+                <p class="text-gray-200">Facial measurements and symmetry analysis</p>
+            </div>
+            <div class="feature-card rounded-xl p-6 text-center">
+                <i class="fas fa-brain text-4xl mb-4"></i>
+                <h3 class="text-xl font-bold mb-2">Enhanced Matching</h3>
+                <p class="text-gray-200">Combines 2D and 3D features for better accuracy</p>
+            </div>
+        </div>
+
+        <!-- Demo Sections -->
+        <div class="grid lg:grid-cols-2 gap-8">
+            <!-- Single Face Analysis -->
+            <div class="bg-gray-800 rounded-xl p-6">
+                <h3 class="text-2xl font-bold mb-6 flex items-center">
+                    <i class="fas fa-search mr-3 text-blue-400"></i>
+                    3D Face Analysis
+                </h3>
+                
+                <div class="space-y-4">
+                    <div class="border-2 border-dashed border-gray-600 rounded-lg p-6 text-center">
+                        <input type="file" id="analysisFile" accept="image/*" class="hidden">
+                        <label for="analysisFile" class="cursor-pointer">
+                            <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                            <p class="text-gray-400">Click to upload an image for 3D analysis</p>
+                        </label>
+                    </div>
+                    
+                    <button onclick="analyzeImage()" class="w-full bg-blue-600 hover:bg-blue-700 px-6 py-3 rounded-lg font-semibold transition">
+                        <i class="fas fa-cogs mr-2"></i>Analyze Face
+                    </button>
+                </div>
+
+                <!-- Analysis Results -->
+                <div id="analysisResults" class="hidden mt-6">
+                    <div class="analysis-result rounded-xl p-6">
+                        <h4 class="text-xl font-bold mb-4">Analysis Results</h4>
+                        
+                        <!-- 3D Visualization -->
+                        <div class="mb-4">
+                            <img id="visualizationImage" class="w-full rounded-lg" alt="3D Landmarks Visualization">
+                        </div>
+                        
+                        <!-- Feature Metrics -->
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <p><strong>Face Width:</strong> <span id="faceWidth">-</span></p>
+                                <p><strong>Face Height:</strong> <span id="faceHeight">-</span></p>
+                                <p><strong>Face Depth:</strong> <span id="faceDepth">-</span></p>
+                                <p><strong>Eye Distance:</strong> <span id="eyeDistance">-</span></p>
+                                <p><strong>Nose Length:</strong> <span id="noseLength">-</span></p>
+                            </div>
+                            <div>
+                                <p><strong>Nose Protrusion:</strong> <span id="noseProtrusion">-</span></p>
+                                <p><strong>Mouth Width:</strong> <span id="mouthWidth">-</span></p>
+                                <p><strong>Symmetry Score:</strong> <span id="symmetryScore">-</span></p>
+                                <p><strong>Face Curvature:</strong> <span id="faceCurvature">-</span></p>
+                                <p><strong>Quality Score:</strong> <span id="qualityScore">-</span></p>
+                            </div>
+                        </div>
+                        
+                        <!-- Pose Information -->
+                        <div class="mt-4 p-4 bg-black bg-opacity-30 rounded-lg">
+                            <h5 class="font-bold mb-2">Head Pose</h5>
+                            <div class="grid grid-cols-3 gap-4 text-sm">
+                                <div class="text-center">
+                                    <p class="text-gray-300">Yaw</p>
+                                    <p class="text-xl font-bold" id="poseYaw">-</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-gray-300">Pitch</p>
+                                    <p class="text-xl font-bold" id="posePitch">-</p>
+                                </div>
+                                <div class="text-center">
+                                    <p class="text-gray-300">Roll</p>
+                                    <p class="text-xl font-bold" id="poseRoll">-</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Face Comparison -->
+            <div class="bg-gray-800 rounded-xl p-6">
+                <h3 class="text-2xl font-bold mb-6 flex items-center">
+                    <i class="fas fa-balance-scale mr-3 text-green-400"></i>
+                    3D Face Comparison
+                </h3>
+                
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center">
+                            <input type="file" id="compareFile1" accept="image/*" class="hidden">
+                            <label for="compareFile1" class="cursor-pointer">
+                                <i class="fas fa-user text-2xl text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-400">Face 1</p>
+                            </label>
+                        </div>
+                        <div class="border-2 border-dashed border-gray-600 rounded-lg p-4 text-center">
+                            <input type="file" id="compareFile2" accept="image/*" class="hidden">
+                            <label for="compareFile2" class="cursor-pointer">
+                                <i class="fas fa-user text-2xl text-gray-400 mb-2"></i>
+                                <p class="text-sm text-gray-400">Face 2</p>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button onclick="compareFaces()" class="w-full bg-green-600 hover:bg-green-700 px-6 py-3 rounded-lg font-semibold transition">
+                        <i class="fas fa-equals mr-2"></i>Compare Faces
+                    </button>
+                </div>
+
+                <!-- Comparison Results -->
+                <div id="comparisonResults" class="hidden mt-6">
+                    <div class="comparison-result rounded-xl p-6">
+                        <h4 class="text-xl font-bold mb-4">Comparison Results</h4>
+                        
+                        <!-- Similarity Score -->
+                        <div class="text-center mb-6">
+                            <div class="text-4xl font-bold mb-2" id="similarityScore">-</div>
+                            <div class="text-lg" id="matchResult">-</div>
+                            <div class="w-full bg-gray-700 rounded-full h-3 mt-3">
+                                <div id="similarityBar" class="bg-gradient-to-r from-red-500 to-green-500 h-3 rounded-full transition-all duration-1000" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        
+                        <!-- Feature Comparison -->
+                        <div class="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                                <h5 class="font-bold mb-2">Face 1 Features</h5>
+                                <div id="face1Features" class="space-y-1">
+                                    <!-- Features will be populated here -->
+                                </div>
+                            </div>
+                            <div>
+                                <h5 class="font-bold mb-2">Face 2 Features</h5>
+                                <div id="face2Features" class="space-y-1">
+                                    <!-- Features will be populated here -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Technical Information -->
+        <div class="mt-12 bg-gray-800 rounded-xl p-6">
+            <h3 class="text-2xl font-bold mb-6 flex items-center">
+                <i class="fas fa-info-circle mr-3 text-purple-400"></i>
+                Technical Details
+            </h3>
+            
+            <div class="grid md:grid-cols-2 gap-8">
+                <div>
+                    <h4 class="text-xl font-bold mb-4">3D Reconstruction Pipeline</h4>
+                    <ul class="space-y-2 text-gray-300">
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>MediaPipe Face Mesh (468 landmarks)</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>3D coordinate extraction with depth estimation</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Facial feature measurement and analysis</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Pose estimation (yaw, pitch, roll)</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Symmetry and curvature analysis</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Quality assessment and confidence scoring</li>
+                    </ul>
+                </div>
+                <div>
+                    <h4 class="text-xl font-bold mb-4">Enhanced Recognition</h4>
+                    <ul class="space-y-2 text-gray-300">
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Procrustes alignment for landmark matching</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Multi-metric similarity calculation</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Weighted feature comparison</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Combined 2D + 3D scoring</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Pose-invariant matching</li>
+                        <li><i class="fas fa-check text-green-400 mr-2"></i>Improved accuracy under occlusion</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading Modal -->
+    <div id="loadingModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-8 text-center">
+            <div class="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-400 mx-auto mb-4"></div>
+            <p class="text-xl">Processing 3D analysis...</p>
+        </div>
+    </div>
+
+    <script>
+        function showLoading() {
+            document.getElementById('loadingModal').classList.remove('hidden');
+        }
+
+        function hideLoading() {
+            document.getElementById('loadingModal').classList.add('hidden');
+        }
+
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `fixed top-4 right-4 p-4 rounded-lg text-white z-50 ${
+                type === 'error' ? 'bg-red-600' : type === 'success' ? 'bg-green-600' : 'bg-blue-600'
+            }`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.remove();
+            }, 3000);
+        }
+
+        async function analyzeImage() {
+            const fileInput = document.getElementById('analysisFile');
+            const file = fileInput.files[0];
+            
+            if (!file) {
+                showToast('Please select an image first', 'error');
+                return;
+            }
+
+            showLoading();
+            
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const response = await fetch('/api/analyze_3d_face', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    displayAnalysisResults(result);
+                    showToast('3D analysis completed successfully!', 'success');
+                } else {
+                    showToast(result.msg || 'Analysis failed', 'error');
+                }
+            } catch (error) {
+                showToast('Error during analysis: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayAnalysisResults(result) {
+            // Show results container
+            document.getElementById('analysisResults').classList.remove('hidden');
+            
+            // Display visualization
+            document.getElementById('visualizationImage').src = 'data:image/jpeg;base64,' + result.visualization;
+            
+            // Display features
+            const features = result.features;
+            document.getElementById('faceWidth').textContent = features.face_width.toFixed(3);
+            document.getElementById('faceHeight').textContent = features.face_height.toFixed(3);
+            document.getElementById('faceDepth').textContent = features.face_depth.toFixed(3);
+            document.getElementById('eyeDistance').textContent = features.eye_distance.toFixed(3);
+            document.getElementById('noseLength').textContent = features.nose_length.toFixed(3);
+            document.getElementById('noseProtrusion').textContent = features.nose_protrusion.toFixed(3);
+            document.getElementById('mouthWidth').textContent = features.mouth_width.toFixed(3);
+            document.getElementById('symmetryScore').textContent = features.symmetry_score.toFixed(3);
+            document.getElementById('faceCurvature').textContent = features.face_curvature.toFixed(3);
+            document.getElementById('qualityScore').textContent = result.quality_score.toFixed(3);
+            
+            // Display pose
+            const pose = result.pose_angles;
+            document.getElementById('poseYaw').textContent = pose.yaw.toFixed(1) + '°';
+            document.getElementById('posePitch').textContent = pose.pitch.toFixed(1) + '°';
+            document.getElementById('poseRoll').textContent = pose.roll.toFixed(1) + '°';
+        }
+
+        async function compareFaces() {
+            const file1 = document.getElementById('compareFile1').files[0];
+            const file2 = document.getElementById('compareFile2').files[0];
+            
+            if (!file1 || !file2) {
+                showToast('Please select both images for comparison', 'error');
+                return;
+            }
+
+            showLoading();
+            
+            const formData = new FormData();
+            formData.append('file1', file1);
+            formData.append('file2', file2);
+
+            try {
+                const response = await fetch('/api/compare_3d_faces', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                
+                if (result.status === 'success') {
+                    displayComparisonResults(result);
+                    showToast('Face comparison completed!', 'success');
+                } else {
+                    showToast(result.msg || 'Comparison failed', 'error');
+                }
+            } catch (error) {
+                showToast('Error during comparison: ' + error.message, 'error');
+            } finally {
+                hideLoading();
+            }
+        }
+
+        function displayComparisonResults(result) {
+            // Show results container
+            document.getElementById('comparisonResults').classList.remove('hidden');
+            
+            // Display similarity score
+            const similarity = result.similarity_score;
+            document.getElementById('similarityScore').textContent = (similarity * 100).toFixed(1) + '%';
+            document.getElementById('matchResult').textContent = result.match_result;
+            
+            // Update similarity bar
+            const bar = document.getElementById('similarityBar');
+            bar.style.width = (similarity * 100) + '%';
+            
+            // Display features for both faces
+            displayFaceFeatures('face1Features', result.face1_features);
+            displayFaceFeatures('face2Features', result.face2_features);
+        }
+
+        function displayFaceFeatures(containerId, features) {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            
+            for (const [key, value] of Object.entries(features)) {
+                const div = document.createElement('div');
+                div.innerHTML = `<strong>${key.replace('_', ' ')}:</strong> ${value.toFixed(3)}`;
+                container.appendChild(div);
+            }
+        }
+
+        // File input preview
+        document.getElementById('analysisFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const label = e.target.nextElementSibling;
+                label.innerHTML = `<i class="fas fa-image text-4xl text-green-400 mb-2"></i><p class="text-green-400">${file.name}</p>`;
+            }
+        });
+
+        document.getElementById('compareFile1').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const label = e.target.nextElementSibling;
+                label.innerHTML = `<i class="fas fa-user text-2xl text-green-400 mb-2"></i><p class="text-sm text-green-400">Face 1 Selected</p>`;
+            }
+        });
+
+        document.getElementById('compareFile2').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                const label = e.target.nextElementSibling;
+                label.innerHTML = `<i class="fas fa-user text-2xl text-green-400 mb-2"></i><p class="text-sm text-green-400">Face 2 Selected</p>`;
+            }
+        });
+    </script>
+</body>
+</html>

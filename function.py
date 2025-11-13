@@ -7,6 +7,21 @@ import datetime
 import pickle
 from pymongo import MongoClient
 from collections import deque
+from typing import Dict, List, Optional, Any, Tuple
+
+# Import 3D reconstruction module
+try:
+    from face_3d_reconstruction import (
+        extract_3d_face_features, 
+        create_advanced_3d_template, 
+        match_3d_face_templates,
+        visualize_3d_landmarks
+    )
+    USE_3D_RECONSTRUCTION = True
+    print("✅ 3D Face Reconstruction enabled")
+except ImportError as e:
+    print(f"⚠️ 3D Face Reconstruction disabled: {e}")
+    USE_3D_RECONSTRUCTION = False
 
 # MongoDB connection
 MONGODB_URI = os.environ.get("MONGODB_URI", "mongodb://localhost:27017")
@@ -178,14 +193,16 @@ def extract_multi_vector_embeddings(images):
     
     return embeddings_data
 
-def create_3d_template(embeddings_data):
-    """Create 3D template from multiple embeddings"""
+def create_3d_template(embeddings_data, images=None):
+    """Create advanced 3D template from multiple embeddings and images"""
     if not embeddings_data:
         return None
     
+    # Sort by quality and select top embeddings
     embeddings_data.sort(key=lambda x: x['quality'], reverse=True)
     top_embeddings = embeddings_data[:min(len(embeddings_data), 10)]
     
+    # Traditional embedding processing
     embeddings = np.array([item['embedding'] for item in top_embeddings])
     weights = np.array([item['quality'] for item in top_embeddings])
     weights = weights / np.sum(weights)
@@ -193,12 +210,43 @@ def create_3d_template(embeddings_data):
     weighted_centroid = np.average(embeddings, axis=0, weights=weights)
     weighted_centroid = weighted_centroid / (np.linalg.norm(weighted_centroid) + 1e-8)
     
-    return {
+    # Base template
+    template = {
         'centroid': weighted_centroid,
         'individual_embeddings': embeddings,
         'weights': weights,
-        'quality_scores': [item['quality'] for item in top_embeddings]
+        'quality_scores': [item['quality'] for item in top_embeddings],
+        'template_type': 'standard'
     }
+    
+    # Add 3D reconstruction if available and images provided
+    if USE_3D_RECONSTRUCTION and images is not None and len(images) >= 3:
+        try:
+            print("🔧 Creating advanced 3D face template...")
+            
+            # Create 3D template
+            template_3d = create_advanced_3d_template(images)
+            
+            if template_3d:
+                # Merge 3D features with traditional template
+                template.update({
+                    'landmarks_3d': template_3d['landmarks_3d'],
+                    'features_3d': template_3d['features'],
+                    'descriptor_3d': template_3d['descriptor'],
+                    'pose_variation': template_3d['pose_variation'],
+                    'confidence_3d': template_3d['confidence'],
+                    'template_type': '3D_advanced',
+                    'version': '2.0'
+                })
+                
+                print(f"✅ 3D template created with confidence: {template_3d['confidence']:.3f}")
+            else:
+                print("⚠️ 3D template creation failed, using standard template")
+                
+        except Exception as e:
+            print(f"⚠️ 3D reconstruction error: {e}, falling back to standard template")
+    
+    return template
 
 def continuous_learning_update(name, new_embedding, confidence):
     """Continuously improve embeddings with new successful recognitions"""
@@ -358,8 +406,8 @@ def rebuild_faiss_index():
     
     return len(person_id_map)
 
-def search_face_faiss(embedding, threshold=0.55):
-    """Enhanced FAISS search with lower threshold for occluded faces"""
+def search_face_faiss(embedding, threshold=0.55, image=None):
+    """Enhanced FAISS search with 3D reconstruction support"""
     if faiss_index is None or faiss_index.ntotal == 0:
         return None, 0.0
     
@@ -376,6 +424,16 @@ def search_face_faiss(embedding, threshold=0.55):
     best_name = None
     best_score = 0.0
     
+    # Extract 3D features if image provided and 3D reconstruction enabled
+    face_3d_features = None
+    if USE_3D_RECONSTRUCTION and image is not None:
+        try:
+            face_3d_features = extract_3d_face_features(image)
+            if face_3d_features:
+                print("🔧 Using 3D face analysis for enhanced matching")
+        except Exception as e:
+            print(f"⚠️ 3D feature extraction failed: {e}")
+    
     try:
         for i in range(len(distances[0])):
             if distances[0][i] < threshold:
@@ -387,7 +445,38 @@ def search_face_faiss(embedding, threshold=0.55):
             person = persons_col.find_one({"name": matched_name})
             if person:
                 stored_template = pickle.loads(person['embedding'])
+                
+                # Traditional ensemble matching
                 ensemble_score = ensemble_matching(embedding, stored_template, threshold)
+                
+                # Enhanced 3D matching if available
+                if (face_3d_features and 
+                    isinstance(stored_template, dict) and 
+                    stored_template.get('template_type') == '3D_advanced'):
+                    
+                    try:
+                        # Create temporary 3D template for current face
+                        current_3d_template = {
+                            'landmarks_3d': face_3d_features['landmarks_3d'],
+                            'features': face_3d_features['features'],
+                            'descriptor': face_3d_features.get('descriptor', np.zeros(100)),
+                            'confidence': face_3d_features['quality_score']
+                        }
+                        
+                        # 3D template matching
+                        similarity_3d = match_3d_face_templates(current_3d_template, stored_template)
+                        
+                        # Combine 2D and 3D scores
+                        combined_score = (ensemble_score * 0.6 + similarity_3d * 0.4)
+                        
+                        print(f"🔍 Enhanced matching: 2D={ensemble_score:.3f}, 3D={similarity_3d:.3f}, Combined={combined_score:.3f}")
+                        
+                        # Use combined score if 3D matching was successful
+                        if similarity_3d > 0.3:  # Minimum 3D confidence
+                            ensemble_score = combined_score
+                            
+                    except Exception as e:
+                        print(f"⚠️ 3D matching error: {e}, using 2D score")
                 
                 if ensemble_score > best_score:
                     best_score = ensemble_score
