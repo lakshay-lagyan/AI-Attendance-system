@@ -1350,8 +1350,15 @@ def detect_face_ultra():
                     try:
                         print("📝 Ultra-attendance marking...")
                         
-                        # Only mark if quality is sufficient
-                        if face['quality']['overall'] > 0.4 and face.get('stability', 0) > 0.3:
+                        # Enhanced validation: quality + stability + liveness
+                        liveness_info = face.get('liveness', {})
+                        is_live = liveness_info.get('is_live', False)
+                        liveness_confidence = liveness_info.get('confidence', 0)
+                        
+                        if (face['quality']['overall'] > 0.4 and 
+                            face.get('stability', 0) > 0.3 and 
+                            is_live and 
+                            liveness_confidence > 70):
                             person = persons_col.find_one({"name": match_result['name']})
                             person_id = person.get('_id') if person else None
                             
@@ -1367,7 +1374,9 @@ def detect_face_ultra():
                                     "pose_info": face.get('pose', {}),
                                     "stability_score": face.get('stability', 0.0),
                                     "detection_confidence": float(face['confidence']),
-                                    "face_description": face.get('description', '')
+                                    "face_description": face.get('description', ''),
+                                    "liveness_info": liveness_info,
+                                    "anti_spoofing": "PASSED"
                                 }
                                 
                                 # Check if attendance already marked today
@@ -1390,8 +1399,20 @@ def detect_face_ultra():
                                 face_result["attendance_error"] = "Person not found in database"
                         else:
                             face_result["attendance_marked"] = False
-                            face_result["quality_insufficient"] = True
-                            face_result["quality_reason"] = f"Quality: {face['quality']['overall']:.2f}, Stability: {face.get('stability', 0):.2f}"
+                            face_result["validation_failed"] = True
+                            
+                            # Detailed reason for validation failure
+                            reasons = []
+                            if face['quality']['overall'] <= 0.4:
+                                reasons.append(f"Low quality ({face['quality']['overall']:.2f})")
+                            if face.get('stability', 0) <= 0.3:
+                                reasons.append(f"Unstable tracking ({face.get('stability', 0):.2f})")
+                            if not is_live:
+                                reasons.append(f"Liveness failed ({liveness_info.get('reason', 'Unknown')})")
+                            if liveness_confidence <= 70:
+                                reasons.append(f"Low liveness confidence ({liveness_confidence:.1f}%)")
+                            
+                            face_result["validation_reason"] = "; ".join(reasons)
                             
                     except Exception as e:
                         print(f"❌ Ultra-attendance error: {e}")
