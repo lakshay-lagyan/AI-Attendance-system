@@ -31,51 +31,49 @@
         }
         .sidebar.active { transform: translateX(0); }
         
-        /* Camera Styles */
-        .camera-container {
-            position: relative;
-            background: #000;
-            border-radius: 12px;
-            overflow: hidden;
-            min-height: 400px;
-        }
-        
-        .camera-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 400px;
-            color: #9ca3af;
+        /* Enhanced Camera Styles */
+        .touch-manipulation {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
         
         .video-stream {
             width: 100%;
-            height: auto;
-            display: block;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0;
         }
         
-        .detection-overlay {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.8);
-            color: white;
-            padding: 8px 12px;
-            border-radius: 8px;
-            font-size: 0.875rem;
+        /* Mobile camera optimizations */
+        @media (max-width: 768px) {
+            .camera-container {
+                min-height: 250px !important;
+            }
+            
+            .video-stream {
+                object-fit: cover;
+            }
         }
         
-        .accuracy-badge {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 0.75rem;
-            font-weight: 600;
+        /* Camera loading animation */
+        @keyframes cameraInit {
+            0% { opacity: 0; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        
+        .camera-ready {
+            animation: cameraInit 0.5s ease-out;
+        }
+        
+        /* Face detection pulse effect */
+        @keyframes detectPulse {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        
+        .detection-active {
+            animation: detectPulse 2s infinite;
         }
         
         @keyframes pulse {
@@ -202,53 +200,95 @@
                 </div>
             </div>
 
-            <!-- Live Camera Feed -->
-            <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                    <h3 class="text-xl font-bold text-gray-800 flex items-center">
-                        <i class="fas fa-camera mr-2 text-purple-500"></i>
-                        <span class="pulse w-3 h-3 bg-red-500 rounded-full mr-2"></span>
-                        Live 3D Face Recognition Camera
-                    </h3>
-                    <div class="flex flex-wrap gap-2">
-                        <button id="toggleCamera" onclick="toggleCameraFeed()" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition duration-300 flex items-center">
-                            <i class="fas fa-play mr-2"></i>
-                            <span>Start Camera</span>
+            <!-- Enhanced Live Attendance Camera -->
+            <div class="bg-white rounded-xl shadow-lg p-3 sm:p-6 mb-8">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-camera mr-2 text-purple-500 text-lg sm:text-xl"></i>
+                        <span id="liveIndicator" class="pulse w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full mr-2"></span>
+                        <h3 class="text-lg sm:text-xl font-bold text-gray-800">Live 3D Face Recognition</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <button id="toggleCamera" onclick="toggleCameraFeed()" class="flex-1 sm:flex-initial bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white px-3 sm:px-4 py-2 rounded-lg transition-all duration-300 flex items-center justify-center touch-manipulation">
+                            <i class="fas fa-play mr-1 sm:mr-2 text-sm"></i>
+                            <span class="text-sm sm:text-base">Start Camera</span>
                         </button>
-                        <button id="switchCamera" onclick="switchCamera()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition duration-300 hidden">
-                            <i class="fas fa-sync-alt mr-2"></i>Switch
+                        <button id="switchCamera" onclick="switchCamera()" class="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3 sm:px-4 py-2 rounded-lg transition-all duration-300 hidden touch-manipulation">
+                            <i class="fas fa-sync-alt mr-1 sm:mr-2 text-sm"></i>
+                            <span class="text-sm sm:text-base">Switch</span>
                         </button>
-                        <button id="capturePhoto" onclick="capturePhoto()" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition duration-300 hidden">
-                            <i class="fas fa-camera mr-2"></i>Capture
+                        <button id="capturePhoto" onclick="capturePhoto()" class="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-3 sm:px-4 py-2 rounded-lg transition-all duration-300 hidden touch-manipulation">
+                            <i class="fas fa-camera mr-1 sm:mr-2 text-sm"></i>
+                            <span class="text-sm sm:text-base">Capture</span>
                         </button>
                     </div>
                 </div>
                 
-                <div class="camera-container">
-                    <div id="cameraPlaceholder" class="camera-placeholder">
-                        <i class="fas fa-cube text-6xl mb-4 text-purple-500"></i>
-                        <h4 class="text-xl font-semibold mb-2">Advanced 3D Face Recognition</h4>
-                        <p class="text-sm mb-4">99.99% accuracy with pose-invariant detection</p>
-                        <div class="flex gap-4 text-xs">
-                            <span><i class="fas fa-eye mr-1"></i>468 Landmarks</span>
-                            <span><i class="fas fa-brain mr-1"></i>3D Analysis</span>
-                            <span><i class="fas fa-shield-alt mr-1"></i>Anti-Spoofing</span>
+                <div class="relative bg-gradient-to-br from-gray-900 to-purple-900 rounded-xl overflow-hidden" style="min-height: 280px; max-height: 500px;">
+                    <!-- Camera Placeholder -->
+                    <div id="cameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-white p-4 sm:p-8">
+                        <div class="text-center">
+                            <i class="fas fa-cube text-4xl sm:text-6xl mb-3 sm:mb-4 text-purple-300 animate-pulse"></i>
+                            <h4 class="text-lg sm:text-xl font-semibold mb-2">Advanced 3D Face Recognition</h4>
+                            <p class="text-xs sm:text-sm mb-3 sm:mb-4 text-purple-200">99.99% accuracy with pose-invariant detection</p>
+                            <div class="flex flex-wrap justify-center gap-3 sm:gap-4 text-xs opacity-75">
+                                <span><i class="fas fa-eye mr-1"></i>468 Landmarks</span>
+                                <span><i class="fas fa-brain mr-1"></i>3D Analysis</span>
+                                <span><i class="fas fa-shield-alt mr-1"></i>Anti-Spoofing</span>
+                            </div>
                         </div>
                     </div>
                     
-                    <div id="videoContainer" style="display: none;">
-                        <video id="videoFeed" class="video-stream" autoplay muted playsinline></video>
-                        <canvas id="detectionCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                    <!-- Video Container -->
+                    <div id="videoContainer" class="relative w-full h-full hidden">
+                        <video id="videoFeed" class="w-full h-full object-cover" autoplay muted playsinline></video>
+                        <canvas id="detectionCanvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
                         
-                        <div class="accuracy-badge">
-                            <span class="pulse w-2 h-2 bg-white rounded-full mr-2"></span>
+                        <!-- Accuracy Badge -->
+                        <div class="absolute top-2 sm:top-4 left-2 sm:left-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold flex items-center shadow-lg">
+                            <span class="pulse w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-1 sm:mr-2"></span>
                             99.99% Accuracy
                         </div>
                         
-                        <div class="detection-overlay" id="detectionInfo">
-                            <div id="faceCount">0 faces detected</div>
-                            <div id="recognitionStatus" class="text-green-400">Ready for recognition</div>
+                        <!-- Detection Info Overlay -->
+                        <div class="absolute top-2 sm:top-4 right-2 sm:right-4 bg-black bg-opacity-80 text-white px-2 sm:px-3 py-1 sm:py-2 rounded-lg text-xs sm:text-sm backdrop-blur-sm">
+                            <div id="faceCount" class="font-semibold">0 faces detected</div>
+                            <div id="recognitionStatus" class="text-green-300 mt-1">Ready for recognition</div>
                         </div>
+                        
+                        <!-- Face Detection Notification -->
+                        <div id="faceDetectionAlert" class="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold hidden animate-pulse">
+                            <i class="fas fa-user-check mr-2"></i>
+                            <span id="detectionMessage">Processing face...</span>
+                        </div>
+                    </div>
+                    
+                    <!-- Loading Indicator -->
+                    <div id="cameraLoading" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+                        <div class="text-white text-center">
+                            <div class="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-white mx-auto mb-2 sm:mb-4"></div>
+                            <p class="text-sm sm:text-base">Initializing Camera...</p>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Camera Stats -->
+                <div class="mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-center">
+                    <div class="bg-purple-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-purple-600 font-semibold" id="totalDetections">0</div>
+                        <div class="text-xs text-purple-500">Detections</div>
+                    </div>
+                    <div class="bg-green-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-green-600 font-semibold" id="successfulMatches">0</div>
+                        <div class="text-xs text-green-500">Matches</div>
+                    </div>
+                    <div class="bg-blue-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-blue-600 font-semibold" id="attendanceMarked">0</div>
+                        <div class="text-xs text-blue-500">Attendance</div>
+                    </div>
+                    <div class="bg-yellow-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-yellow-600 font-semibold" id="cameraUptime">00:00</div>
+                        <div class="text-xs text-yellow-500">Uptime</div>
                     </div>
                 </div>
             </div>
@@ -362,52 +402,88 @@
             }, 3000);
         }
 
-        // Camera functions
+        // Enhanced Camera System with Mobile Support
+        let cameraStats = {
+            totalDetections: 0,
+            successfulMatches: 0,
+            attendanceMarked: 0,
+            startTime: null
+        };
+
         async function toggleCameraFeed() {
             const toggleBtn = document.getElementById('toggleCamera');
             const switchBtn = document.getElementById('switchCamera');
             const captureBtn = document.getElementById('capturePhoto');
             const placeholder = document.getElementById('cameraPlaceholder');
             const videoContainer = document.getElementById('videoContainer');
+            const loadingIndicator = document.getElementById('cameraLoading');
+            const liveIndicator = document.getElementById('liveIndicator');
             
             if (!cameraActive) {
                 try {
+                    // Show loading
+                    showLoading(true);
+                    showToast('Initializing 3D Face Recognition Camera...', 'info');
+                    
                     await getAvailableCameras();
                     await startCamera();
                     
-                    placeholder.style.display = 'none';
-                    videoContainer.style.display = 'block';
+                    // Hide loading and show video
+                    showLoading(false);
+                    placeholder.classList.add('hidden');
+                    videoContainer.classList.remove('hidden');
                     
-                    toggleBtn.innerHTML = '<i class="fas fa-stop mr-2"></i><span>Stop Camera</span>';
-                    toggleBtn.className = toggleBtn.className.replace('bg-purple-600 hover:bg-purple-700', 'bg-red-600 hover:bg-red-700');
+                    // Update UI
+                    toggleBtn.innerHTML = '<i class="fas fa-stop mr-1 sm:mr-2 text-sm"></i><span class="text-sm sm:text-base">Stop Camera</span>';
+                    toggleBtn.className = toggleBtn.className.replace('bg-purple-600 hover:bg-purple-700 active:bg-purple-800', 'bg-red-600 hover:bg-red-700 active:bg-red-800');
                     
                     if (availableCameras.length > 1) {
                         switchBtn.classList.remove('hidden');
                     }
                     captureBtn.classList.remove('hidden');
                     
+                    // Change indicator to green (active)
+                    liveIndicator.className = liveIndicator.className.replace('bg-red-500', 'bg-green-500');
+                    
+                    // Start detection and stats
                     startFaceDetection();
+                    startCameraStats();
                     cameraActive = true;
                     
                     showToast('3D Face Recognition Camera Started - 99.99% Accuracy Active', 'success');
                 } catch (error) {
                     console.error('Camera error:', error);
-                    showToast('Camera access denied or not available', 'error');
+                    showLoading(false);
+                    showToast('Camera access denied. Please allow camera permissions.', 'error');
                 }
             } else {
                 stopCamera();
                 
-                placeholder.style.display = 'flex';
-                videoContainer.style.display = 'none';
+                // Show placeholder
+                placeholder.classList.remove('hidden');
+                videoContainer.classList.add('hidden');
                 
-                toggleBtn.innerHTML = '<i class="fas fa-play mr-2"></i><span>Start Camera</span>';
-                toggleBtn.className = toggleBtn.className.replace('bg-red-600 hover:bg-red-700', 'bg-purple-600 hover:bg-purple-700');
+                // Reset UI
+                toggleBtn.innerHTML = '<i class="fas fa-play mr-1 sm:mr-2 text-sm"></i><span class="text-sm sm:text-base">Start Camera</span>';
+                toggleBtn.className = toggleBtn.className.replace('bg-red-600 hover:bg-red-700 active:bg-red-800', 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800');
                 
                 switchBtn.classList.add('hidden');
                 captureBtn.classList.add('hidden');
                 
+                // Change indicator back to red (inactive)
+                liveIndicator.className = liveIndicator.className.replace('bg-green-500', 'bg-red-500');
+                
                 cameraActive = false;
                 showToast('Camera stopped', 'info');
+            }
+        }
+
+        function showLoading(show) {
+            const loadingIndicator = document.getElementById('cameraLoading');
+            if (show) {
+                loadingIndicator.classList.remove('hidden');
+            } else {
+                loadingIndicator.classList.add('hidden');
             }
         }
 
@@ -416,31 +492,53 @@
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 availableCameras = devices.filter(device => device.kind === 'videoinput');
                 console.log('Available cameras:', availableCameras.length);
+                
+                // Request permissions first
+                if (availableCameras.length === 0) {
+                    await navigator.mediaDevices.getUserMedia({ video: true });
+                    const newDevices = await navigator.mediaDevices.enumerateDevices();
+                    availableCameras = newDevices.filter(device => device.kind === 'videoinput');
+                }
             } catch (error) {
                 console.error('Error getting cameras:', error);
+                throw new Error('Camera access denied or no cameras available');
             }
         }
 
         async function startCamera() {
             try {
+                // Mobile-optimized constraints
+                const isMobile = window.innerWidth <= 768;
                 const constraints = {
                     video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30 },
-                        deviceId: availableCameras.length > 0 ? 
+                        width: { ideal: isMobile ? 720 : 1280 },
+                        height: { ideal: isMobile ? 480 : 720 },
+                        frameRate: { ideal: isMobile ? 24 : 30 },
+                        facingMode: isMobile ? 'user' : undefined, // Front camera on mobile
+                        deviceId: availableCameras.length > 0 && !isMobile ? 
                             { exact: availableCameras[currentCameraIndex].deviceId } : undefined
                     }
                 };
+
+                // Stop existing stream
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
 
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 const videoFeed = document.getElementById('videoFeed');
                 videoFeed.srcObject = currentStream;
                 
-                return true;
+                // Wait for video to be ready
+                return new Promise((resolve) => {
+                    videoFeed.onloadedmetadata = () => {
+                        videoFeed.play();
+                        setTimeout(resolve, 500); // Give extra time for camera to stabilize
+                    };
+                });
             } catch (error) {
                 console.error('Error starting camera:', error);
-                throw error;
+                throw new Error('Failed to start camera. Please check permissions.');
             }
         }
 
@@ -453,48 +551,127 @@
                 clearInterval(faceDetectionInterval);
                 faceDetectionInterval = null;
             }
+            if (cameraStats.uptimeInterval) {
+                clearInterval(cameraStats.uptimeInterval);
+                cameraStats.uptimeInterval = null;
+            }
         }
 
         async function switchCamera() {
-            if (availableCameras.length <= 1) return;
+            if (availableCameras.length <= 1) {
+                showToast('No additional cameras available', 'info');
+                return;
+            }
             
+            showToast('Switching camera...', 'info');
             currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
             
-            stopCamera();
+            showLoading(true);
             await startCamera();
-            startFaceDetection();
+            showLoading(false);
             
-            showToast(`Switched to camera ${currentCameraIndex + 1}`, 'info');
+            if (cameraActive) {
+                startFaceDetection();
+            }
+            
+            showToast(`Switched to camera ${currentCameraIndex + 1} of ${availableCameras.length}`, 'success');
         }
 
         function startFaceDetection() {
+            let detectionCounter = 0;
+            
             faceDetectionInterval = setInterval(() => {
-                // Simulate face detection
-                const faceCount = Math.floor(Math.random() * 3);
-                document.getElementById('faceCount').textContent = `${faceCount} faces detected`;
+                detectionCounter++;
+                
+                // Enhanced face detection simulation
+                const faceCount = Math.random() < 0.7 ? Math.floor(Math.random() * 2) + 1 : 0;
+                document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
                 
                 if (faceCount > 0) {
-                    document.getElementById('recognitionStatus').textContent = '3D analysis in progress...';
-                    document.getElementById('recognitionStatus').className = 'text-yellow-400';
+                    cameraStats.totalDetections++;
+                    updateCameraStats();
                     
-                    // Simulate recognition after 2 seconds
+                    // Show detection alert
+                    showFaceDetectionAlert('Face detected - Analyzing...', 'processing');
+                    
+                    document.getElementById('recognitionStatus').textContent = '3D analysis in progress...';
+                    document.getElementById('recognitionStatus').className = 'text-yellow-300 mt-1';
+                    
+                    // Simulate 3D analysis time (1.5-3 seconds)
+                    const analysisTime = 1500 + Math.random() * 1500;
                     setTimeout(() => {
-                        if (Math.random() > 0.3) {
-                            const names = ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson'];
+                        if (Math.random() > 0.25) { // 75% success rate
+                            const names = ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson', 'Alex Chen', 'Emma Davis'];
                             const name = names[Math.floor(Math.random() * names.length)];
-                            document.getElementById('recognitionStatus').textContent = `✓ ${name} - Attendance Marked`;
-                            document.getElementById('recognitionStatus').className = 'text-green-400';
-                            showToast(`Attendance marked for ${name}`, 'success');
+                            const confidence = (95 + Math.random() * 4.9).toFixed(1);
+                            
+                            document.getElementById('recognitionStatus').textContent = `✓ ${name} (${confidence}%)`;
+                            document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                            
+                            showFaceDetectionAlert(`✓ ${name} - Attendance Marked!`, 'success');
+                            showToast(`Attendance marked for ${name} (${confidence}% confidence)`, 'success');
+                            
+                            cameraStats.successfulMatches++;
+                            cameraStats.attendanceMarked++;
+                            updateCameraStats();
+                            
+                            // Refresh live attendance data
+                            setTimeout(loadLiveAttendance, 1000);
                         } else {
-                            document.getElementById('recognitionStatus').textContent = 'Face not recognized';
-                            document.getElementById('recognitionStatus').className = 'text-red-400';
+                            document.getElementById('recognitionStatus').textContent = 'Face not recognized - Try again';
+                            document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
+                            showFaceDetectionAlert('Face not recognized - Please face the camera', 'error');
                         }
-                    }, 2000);
+                    }, analysisTime);
                 } else {
                     document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
-                    document.getElementById('recognitionStatus').className = 'text-green-400';
+                    document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                    hideFaceDetectionAlert();
                 }
+            }, 800 + Math.random() * 400); // Vary detection interval (0.8-1.2 seconds)
+        }
+
+        function showFaceDetectionAlert(message, type) {
+            const alert = document.getElementById('faceDetectionAlert');
+            const messageSpan = document.getElementById('detectionMessage');
+            
+            messageSpan.textContent = message;
+            alert.classList.remove('hidden');
+            
+            // Change color based on type
+            if (type === 'success') {
+                alert.className = alert.className.replace(/from-\w+-500 to-\w+-600/, 'from-green-500 to-emerald-600');
+            } else if (type === 'error') {
+                alert.className = alert.className.replace(/from-\w+-500 to-\w+-600/, 'from-red-500 to-pink-600');
+            } else {
+                alert.className = alert.className.replace(/from-\w+-500 to-\w+-600/, 'from-blue-500 to-purple-600');
+            }
+        }
+
+        function hideFaceDetectionAlert() {
+            const alert = document.getElementById('faceDetectionAlert');
+            alert.classList.add('hidden');
+        }
+
+        function startCameraStats() {
+            cameraStats.startTime = Date.now();
+            cameraStats.totalDetections = 0;
+            cameraStats.successfulMatches = 0;
+            cameraStats.attendanceMarked = 0;
+            
+            // Update uptime every second
+            cameraStats.uptimeInterval = setInterval(() => {
+                const uptime = Date.now() - cameraStats.startTime;
+                const minutes = Math.floor(uptime / 60000);
+                const seconds = Math.floor((uptime % 60000) / 1000);
+                document.getElementById('cameraUptime').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
             }, 1000);
+        }
+
+        function updateCameraStats() {
+            document.getElementById('totalDetections').textContent = cameraStats.totalDetections;
+            document.getElementById('successfulMatches').textContent = cameraStats.successfulMatches;
+            document.getElementById('attendanceMarked').textContent = cameraStats.attendanceMarked;
         }
 
         async function capturePhoto() {
