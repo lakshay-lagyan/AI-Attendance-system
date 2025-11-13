@@ -1187,6 +1187,11 @@ def detect_face_realtime():
             "message": f"Face detection failed: {str(e)}"
         }), 500
 
+@app.route("/attendance")
+def attendance_camera():
+    """Attendance camera page"""
+    return render_template("attendance_camera.html")
+
 @app.route("/api/mark_attendance", methods=["POST"])
 @admin_required
 def mark_attendance_api():

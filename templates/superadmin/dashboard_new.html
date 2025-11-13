@@ -891,19 +891,36 @@
             } else {
                 mainContent.classList.toggle('expanded');
             }
+            
+            menuToggle.classList.toggle('active');
         }
 
         menuToggle.addEventListener('click', toggleSidebar);
         sidebarOverlay.addEventListener('click', toggleSidebar);
 
+        // Close sidebar when clicking a link on mobile
+        document.querySelectorAll('.nav-link').forEach(link => {
+            link.addEventListener('click', () => {
+                if (isMobile && sidebar.classList.contains('active')) {
+                    toggleSidebar();
+                }
+            });
+        });
+
+        // Handle window resize
         window.addEventListener('resize', () => {
             const wasMobile = isMobile;
-            isMobile = window.innerWidth <= 1024;
+            isMobile = window.innerWidth <= 768;
             
             if (wasMobile !== isMobile) {
                 sidebar.classList.remove('active', 'collapsed');
                 mainContent.classList.remove('expanded');
                 sidebarOverlay.classList.remove('show');
+                menuToggle.classList.remove('active');
+                
+                if (!isMobile) {
+                    sidebar.style.transform = '';
+                }
             }
         });
 
