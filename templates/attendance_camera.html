@@ -28,7 +28,33 @@
             70% { box-shadow: 0 0 0 15px rgba(34, 197, 94, 0); }
             100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
         }
-        .detection-active { animation: detectPulse 2s infinite; }
+        .detection-active {
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.5);
+            border: 2px solid #00ff00;
+        }
+
+        #detectionCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        .fake-face-warning {
+            animation: pulse-red 1s infinite;
+        }
+
+        @keyframes pulse-red {
+            0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+        }
+
+        .face-label {
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+        }
         
         .toast {
             position: fixed;
@@ -406,7 +432,26 @@
                                 const faceCount = result.faces_detected;
                                 document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
                                 
+                                // Draw all faces with their labels
                                 if (faceCount > 0 && result.faces && result.faces.length > 0) {
+                                    drawFaceBoundingBox(result.faces, null);
+                                    
+                                    // Check for fake faces and show warnings
+                                    const fakeFaces = result.faces.filter(face => 
+                                        face.liveness && !face.liveness.is_live
+                                    );
+                                    
+                                    if (fakeFaces.length > 0) {
+                                        const video = document.getElementById('video');
+                                        video.classList.add('fake-face-warning');
+                                        setTimeout(() => video.classList.remove('fake-face-warning'), 3000);
+                                        
+                                        showToast(`FAKE FACE DETECTED! ${fakeFaces[0].liveness.reason}`, 'error');
+                                        document.getElementById('recognitionStatus').textContent = `FAKE FACE DETECTED!`;
+                                        document.getElementById('recognitionStatus').className = 'text-red-500 font-bold mt-1';
+                                        return;
+                                    }
+                                    
                                     const face = result.faces[0];
                                     
                                     if (face.recognized) {
@@ -434,11 +479,11 @@
                                             showToast(`${face.name} - Already marked today`, 'info');
                                         }
                                         
-                                        drawFaceBoundingBox(result.faces, true);
+                                        drawFaceBoundingBox(result.faces, null);
                                     } else {
                                         document.getElementById('recognitionStatus').textContent = 'Face not recognized';
                                         document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
-                                        drawFaceBoundingBox(result.faces, false);
+                                        drawFaceBoundingBox(result.faces, null);
                                     }
                                 } else {
                                     document.getElementById('recognitionStatus').textContent = 'Ready to scan';
@@ -497,11 +542,11 @@
                                                     showToast(`${face.name} - Already marked today`, 'info');
                                                 }
                                                 
-                                                drawFaceBoundingBox([face], true);
+                                                drawFaceBoundingBox([face], face.recognized);
                                             } else {
                                                 document.getElementById('recognitionStatus').textContent = 'Face not recognized';
                                                 document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
-                                                drawFaceBoundingBox([face], false);
+                                                drawFaceBoundingBox([face], null);
                                             }
                                         }
                                     }
@@ -539,38 +584,141 @@
 
         function drawFaceBoundingBox(faces, recognized) {
             const canvas = document.getElementById('detectionCanvas');
+            const ctx = canvas.getContext('2d');
             const video = document.getElementById('videoFeed');
             
-            if (!canvas || !video) return;
-            
-            canvas.width = video.offsetWidth;
-            canvas.height = video.offsetHeight;
-            
-            const ctx = canvas.getContext('2d');
+            // Clear previous drawings
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            const scaleX = canvas.width / video.videoWidth;
-            const scaleY = canvas.height / video.videoHeight;
+            if (!faces || faces.length === 0) return;
             
-            faces.forEach(face => {
-                if (face.bbox) {
-                    const x = face.bbox.x * scaleX;
-                    const y = face.bbox.y * scaleY;
-                    const width = face.bbox.width * scaleX;
-                    const height = face.bbox.height * scaleY;
+            faces.forEach((face, index) => {
+                const bbox = face.bbox;
+                const x = bbox.x;
+                const y = bbox.y;
+                const width = bbox.width;
+                const height = bbox.height;
+                
+                // Determine face status and colors
+                let borderColor = '#ff0000';  // Default red for unknown
+                let labelText = 'Unknown';
+                let backgroundColor = 'rgba(255, 0, 0, 0.8)';
+                let textColor = 'white';
+                
+                // Check for liveness/fake detection
+                const liveness = face.liveness || {};
+                const isLive = liveness.is_live;
+                const livenessConfidence = liveness.confidence || 0;
+                
+                if (!isLive && livenessConfidence < 70) {
+                    // Fake face detected
+                    borderColor = '#ff6600';  // Orange for fake
+                    backgroundColor = 'rgba(255, 102, 0, 0.9)';
+                    labelText = `FAKE FACE (${livenessConfidence.toFixed(0)}%)`;
+                    textColor = 'white';
+                } else if (face.recognized && face.name && face.name !== 'Unknown') {
+                    // Recognized user
+                    borderColor = '#00ff00';  // Green for recognized
+                    backgroundColor = 'rgba(0, 255, 0, 0.8)';
+                    labelText = face.name;
+                    textColor = 'white';
                     
-                    ctx.strokeStyle = recognized ? '#10b981' : '#ef4444';
-                    ctx.lineWidth = 3;
-                    ctx.strokeRect(x, y, width, height);
-                    
-                    if (recognized && face.name) {
-                        ctx.fillStyle = '#10b981';
-                        ctx.fillRect(x, y - 30, width, 25);
-                        
-                        ctx.fillStyle = 'white';
-                        ctx.font = '14px Arial';
-                        ctx.fillText(face.name, x + 5, y - 10);
+                    // Add confidence if available
+                    const matchConfidence = face.match_confidence || 0;
+                    if (matchConfidence > 0) {
+                        labelText += ` (${(matchConfidence * 100).toFixed(0)}%)`;
                     }
+                } else {
+                    // Unknown but live face
+                    borderColor = '#ffff00';  // Yellow for unknown but live
+                    backgroundColor = 'rgba(255, 255, 0, 0.8)';
+                    labelText = 'UNKNOWN PERSON';
+                    textColor = 'black';
+                }
+                
+                // Draw main bounding box
+                ctx.strokeStyle = borderColor;
+                ctx.lineWidth = 3;
+                ctx.strokeRect(x, y, width, height);
+                
+                // Add pulsing effect for fake faces
+                if (!isLive) {
+                    ctx.strokeStyle = '#ff0000';
+                    ctx.lineWidth = 1;
+                    ctx.setLineDash([5, 5]);
+                    ctx.strokeRect(x - 2, y - 2, width + 4, height + 4);
+                    ctx.setLineDash([]);
+                }
+                
+                // Calculate label dimensions
+                ctx.font = 'bold 14px Arial';
+                const textMetrics = ctx.measureText(labelText);
+                const textWidth = textMetrics.width + 10;
+                const textHeight = 25;
+                
+                // Position label above the face box
+                let labelX = x;
+                let labelY = y - textHeight;
+                
+                // Adjust if label goes off screen
+                if (labelY < 0) {
+                    labelY = y + height + 5;
+                }
+                if (labelX + textWidth > canvas.width) {
+                    labelX = canvas.width - textWidth;
+                }
+                if (labelX < 0) {
+                    labelX = 0;
+                }
+                
+                // Draw label background
+                ctx.fillStyle = backgroundColor;
+                ctx.fillRect(labelX, labelY, textWidth, textHeight);
+                
+                // Draw label border
+                ctx.strokeStyle = borderColor;
+                ctx.lineWidth = 2;
+                ctx.strokeRect(labelX, labelY, textWidth, textHeight);
+                
+                // Draw label text
+                ctx.fillStyle = textColor;
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText(labelText, labelX + 5, labelY + 17);
+                
+                // Add quality indicator for recognized faces
+                if (face.recognized && face.quality) {
+                    const quality = face.quality.overall || 0;
+                    const qualityText = `Quality: ${(quality * 100).toFixed(0)}%`;
+                    
+                    ctx.font = '12px Arial';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    ctx.fillRect(x, y + height - 20, ctx.measureText(qualityText).width + 6, 18);
+                    ctx.fillStyle = 'black';
+                    ctx.fillText(qualityText, x + 3, y + height - 6);
+                }
+                
+                // Add liveness indicator
+                if (liveness.confidence !== undefined) {
+                    const livenessText = `Liveness: ${livenessConfidence.toFixed(0)}%`;
+                    const livenessColor = isLive ? '#00ff00' : '#ff0000';
+                    
+                    ctx.font = '11px Arial';
+                    const livenessWidth = ctx.measureText(livenessText).width + 6;
+                    
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+                    ctx.fillRect(x + width - livenessWidth, y, livenessWidth, 16);
+                    ctx.fillStyle = livenessColor;
+                    ctx.fillText(livenessText, x + width - livenessWidth + 3, y + 12);
+                }
+                
+                // Add face ID for tracking
+                if (face.face_id !== undefined) {
+                    ctx.font = 'bold 10px Arial';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+                    ctx.fillRect(x - 2, y - 2, 25, 15);
+                    ctx.fillStyle = 'black';
+                    ctx.fillText(`#${face.face_id}`, x + 2, y + 10);
                 }
             });
         }
