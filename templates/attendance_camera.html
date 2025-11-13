@@ -94,7 +94,7 @@
             <div class="flex justify-between items-center h-16">
                 <div class="flex items-center">
                     <i class="fas fa-camera text-2xl text-purple-600 mr-3"></i>
-                    <h1 class="text-xl font-bold text-gray-900">Face Recognition Attendance</h1>
+                    <h1 class="text-xl font-bold text-gray-900">Smart Attendance</h1>
                 </div>
                 <a href="/superadmin/dashboard" class="bg-purple-600 hover:bg-purple-700 text-white px-4 py-2 rounded-lg transition-colors duration-300 flex items-center">
                     <i class="fas fa-tachometer-alt mr-2"></i>
@@ -107,7 +107,7 @@
     <!-- Main Content -->
     <main class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         <!-- Instructions Card -->
-        <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <!-- <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
             <div class="text-center">
                 <i class="fas fa-info-circle text-4xl text-blue-500 mb-4"></i>
                 <h2 class="text-2xl font-bold text-gray-800 mb-3">Mark Your Attendance</h2>
@@ -127,7 +127,7 @@
                     </div>
                 </div>
             </div>
-        </div>
+        </div> -->
 
         <!-- Camera Section -->
         <div class="bg-white rounded-xl shadow-lg p-6">
@@ -156,7 +156,7 @@
                         <h4 class="text-2xl font-semibold mb-3">3D Face Recognition Ready</h4>
                         <p class="text-lg mb-6 text-purple-200">Click "Start Camera" to begin attendance marking</p>
                         <div class="flex flex-wrap justify-center gap-6 text-sm opacity-75">
-                            <span><i class="fas fa-eye mr-2"></i>468 Landmarks</span>
+                            <span><i class="fas fa-eye mr-2"></i>F</span>
                             <span><i class="fas fa-brain mr-2"></i>3D Analysis</span>
                             <span><i class="fas fa-shield-alt mr-2"></i>Anti-Spoofing</span>
                         </div>
@@ -254,24 +254,8 @@
                     const fr = status.face_recognition;
                     const db = status.database;
                     
-                    if (fr.faiss_loaded && fr.total_persons > 0) {
-                        showToast(`System Ready: ${fr.total_persons} persons in database`, 'success');
-                    } else {
-                        showToast('Warning: No face recognition data loaded', 'error');
-                    }
-                    
-                    console.log('System Status:', status);
-                } else {
-                    showToast('System check failed', 'error');
-                }
-            } catch (error) {
-                console.error('System status error:', error);
-                showToast('Unable to verify system status', 'error');
-            }
-        }
-
-        // Toggle camera function
-        window.toggleCamera = async function() {
+                    // Start camera and face detection
+                    async function startCamera() {
             const toggleBtn = document.getElementById('toggleCamera');
             const switchBtn = document.getElementById('switchCamera');
             const placeholder = document.getElementById('cameraPlaceholder');
@@ -343,6 +327,7 @@
 
         async function startCamera() {
             try {
+                console.log('📹 Requesting camera access...');
                 const isMobile = window.innerWidth <= 768;
                 const constraints = {
                     video: {
@@ -355,16 +340,26 @@
                     }
                 };
 
+                console.log('📱 Camera constraints:', constraints);
+
                 if (currentStream) {
+                    console.log('🔄 Stopping existing camera stream');
                     currentStream.getTracks().forEach(track => track.stop());
                 }
 
+                console.log('🎥 Getting user media...');
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log('✅ Camera stream obtained');
+                
                 const videoFeed = document.getElementById('videoFeed');
+                const canvas = document.getElementById('detectionCanvas');
                 videoFeed.srcObject = currentStream;
                 
                 return new Promise((resolve) => {
                     videoFeed.onloadedmetadata = () => {
+                        console.log(`📱 Video loaded: ${videoFeed.videoWidth}x${videoFeed.videoHeight}`);
+                        canvas.width = videoFeed.videoWidth;
+                        canvas.height = videoFeed.videoHeight;
                         videoFeed.play();
                         setTimeout(resolve, 500);
                     };
@@ -398,7 +393,12 @@
                 
                 try {
                     const video = document.getElementById('videoFeed');
-                    if (!video || video.videoWidth === 0) return;
+                    if (!video || video.videoWidth === 0) {
+                        console.log('⚠️ Video not ready or no dimensions');
+                        return;
+                    }
+                    
+                    console.log(`📸 Capturing frame: ${video.videoWidth}x${video.videoHeight}`);
                     
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
@@ -409,6 +409,8 @@
                     canvas.toBlob(async (blob) => {
                         if (isProcessing) return;
                         isProcessing = true;
+                        
+                        console.log(`🔍 Processing frame blob: ${blob.size} bytes`);
                         
                         try {
                             sessionStats.totalScans++;
@@ -556,19 +558,49 @@
                             } catch (fallbackError) {
                                 console.error('Fallback detection error:', fallbackError);
                                 
-                                // Show detailed error message
-                                let errorMsg = 'Face detection system unavailable';
-                                if (fallbackError.message.includes('500')) {
-                                    errorMsg = 'Server error - please check system status';
-                                } else if (fallbackError.message.includes('404')) {
-                                    errorMsg = 'Face detection API not found';
-                                } else if (fallbackError.message.includes('network') || fallbackError.message.includes('fetch')) {
-                                    errorMsg = 'Network connection error';
+                                // Try simple OpenCV detection as last resort
+                                try {
+                                    console.log('🔄 Trying simple OpenCV detection...');
+                                    const simpleResponse = await fetch('/api/detect_face_simple', {
+                                        method: 'POST',
+                                        body: formData
+                                    });
+                                    
+                                    if (simpleResponse.ok) {
+                                        const simpleResult = await simpleResponse.json();
+                                        console.log('✅ Simple detection working');
+                                        
+                                        if (simpleResult.status === 'success') {
+                                            const faceCount = simpleResult.faces_detected;
+                                            document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected (basic mode)`;
+                                            
+                                            if (faceCount > 0) {
+                                                drawFaceBoundingBox(simpleResult.faces, null);
+                                                document.getElementById('recognitionStatus').textContent = 'Face detected - basic mode (no recognition)';
+                                                document.getElementById('recognitionStatus').className = 'text-yellow-300 mt-1';
+                                                showToast('Basic face detection active - recognition unavailable', 'warning');
+                                            }
+                                        }
+                                    } else {
+                                        throw new Error('Simple detection also failed');
+                                    }
+                                } catch (simpleError) {
+                                    console.error('Simple detection error:', simpleError);
+                                    
+                                    // Show detailed error message
+                                    let errorMsg = 'All face detection systems unavailable';
+                                    if (fallbackError.message.includes('500')) {
+                                        errorMsg = 'Server error - please check system status';
+                                    } else if (fallbackError.message.includes('404')) {
+                                        errorMsg = 'Face detection API not found';
+                                    } else if (fallbackError.message.includes('network') || fallbackError.message.includes('fetch')) {
+                                        errorMsg = 'Network connection error';
+                                    }
+                                    
+                                    showToast(errorMsg, 'error');
+                                    document.getElementById('recognitionStatus').textContent = errorMsg;
+                                    document.getElementById('recognitionStatus').className = 'text-red-400 mt-1';
                                 }
-                                
-                                showToast(errorMsg, 'error');
-                                document.getElementById('recognitionStatus').textContent = errorMsg;
-                                document.getElementById('recognitionStatus').className = 'text-red-400 mt-1';
                             }
                         } finally {
                             isProcessing = false;

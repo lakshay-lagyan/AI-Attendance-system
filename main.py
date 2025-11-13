@@ -1271,6 +1271,91 @@ def detect_face_ultra_test():
         "timestamp": datetime.datetime.utcnow().isoformat()
     })
 
+@app.route("/api/detect_face_simple", methods=["POST"])
+def detect_face_simple():
+    """Simple face detection for testing"""
+    try:
+        file = request.files.get("frame")
+        if not file:
+            return jsonify({
+                "status": "error", 
+                "message": "No image frame provided"
+            }), 400
+        
+        # Convert uploaded frame to image
+        file_bytes = file.read()
+        img_array = np.frombuffer(file_bytes, np.uint8)
+        image = cv.imdecode(img_array, cv.IMREAD_COLOR)
+        
+        if image is None:
+            return jsonify({
+                "status": "error", 
+                "message": "Invalid image format"
+            }), 400
+
+        print(f"📷 Simple processing frame: {image.shape}")
+        
+        # Use basic OpenCV face detection as fallback
+        try:
+            # Load OpenCV face cascade
+            face_cascade = cv.CascadeClassifier(cv.data.haarcascades + 'haarcascade_frontalface_default.xml')
+            
+            # Convert to grayscale
+            gray = cv.cvtColor(image, cv.COLOR_BGR2GRAY)
+            
+            # Detect faces
+            faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+            
+            print(f"🔍 OpenCV detected {len(faces)} face(s)")
+            
+            final_results = []
+            
+            for i, (x, y, w, h) in enumerate(faces):
+                print(f"👤 Face {i+1}: ({x}, {y}, {w}, {h})")
+                
+                face_result = {
+                    "bbox": {"x": x, "y": y, "width": w, "height": h},
+                    "confidence": 0.8,  # Default confidence
+                    "detected": True,
+                    "face_id": i,
+                    "quality": {"overall": 0.7},
+                    "stability": 0.8,
+                    "description": "Basic OpenCV detection",
+                    "recognized": False,
+                    "name": "Unknown",
+                    "match_confidence": 0.0,
+                    "liveness": {
+                        "is_live": True,  # Assume live in simple mode
+                        "confidence": 80.0,
+                        "reason": "Simple detection mode - basic validation"
+                    }
+                }
+                
+                final_results.append(face_result)
+            
+            return jsonify({
+                "status": "success",
+                "faces_detected": len(final_results),
+                "faces": final_results,
+                "timestamp": datetime.datetime.utcnow().isoformat(),
+                "processing_mode": "simple_opencv",
+                "message": f"OpenCV detected {len(final_results)} face(s)"
+            })
+            
+        except Exception as e:
+            print(f"❌ OpenCV detection error: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"Face detection failed: {str(e)}"
+            }), 500
+            
+    except Exception as e:
+        print(f"💥 Simple detection error: {e}")
+        return jsonify({
+            "status": "error",
+            "message": f"Simple detection failed: {str(e)}"
+        }), 500
+
 @app.route("/api/detection_health", methods=["GET"])
 def detection_health():
     """Health check for detection systems"""
@@ -1348,10 +1433,19 @@ def detect_face_enhanced():
         print(f"🔬 Enhanced processing frame: {image.shape}")
         
         # Use MediaPipe for reliable face detection
-        mp_face_detection = mp.solutions.face_detection
-        face_detector = mp_face_detection.FaceDetection(
-            model_selection=1, min_detection_confidence=0.5
-        )
+        try:
+            import mediapipe as mp
+            mp_face_detection = mp.solutions.face_detection
+            face_detector = mp_face_detection.FaceDetection(
+                model_selection=1, min_detection_confidence=0.3  # Lower threshold for better detection
+            )
+            print("✅ MediaPipe face detector initialized")
+        except Exception as e:
+            print(f"❌ MediaPipe initialization error: {e}")
+            return jsonify({
+                "status": "error",
+                "message": f"MediaPipe not available: {str(e)}"
+            }), 500
         
         # Enhance image for better detection
         enhanced = cv.bilateralFilter(image, 9, 75, 75)
@@ -1360,7 +1454,9 @@ def detect_face_enhanced():
         
         final_results = []
         
+        print(f"🔍 MediaPipe detection results: {results.detections is not None}")
         if results.detections:
+            print(f"🎯 Found {len(results.detections)} face(s)")
             h, w = image.shape[:2]
             
             for i, detection in enumerate(results.detections):
@@ -1458,6 +1554,8 @@ def detect_face_enhanced():
                     
                 except Exception as e:
                     print(f"⚠️ Face processing error: {e}")
+        else:
+            print("❌ No faces detected by MediaPipe")
         
         # Enhanced response
         response_data = {
