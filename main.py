@@ -561,6 +561,31 @@ def create_superadmin():
     superadmins_col.insert_one(doc)
     return jsonify({"status": "success", "msg": "Super admin created"}), 201
 
+# --- Health Check Route ---
+@app.route("/health")
+def health_check():
+    """Health check endpoint for Railway deployment"""
+    try:
+        # Check MongoDB connection
+        client.admin.command('ping')
+        
+        # Check FAISS index
+        faiss_status = "loaded" if faiss_index is not None else "not_loaded"
+        
+        return jsonify({
+            "status": "healthy",
+            "mongodb": "connected",
+            "faiss_index": faiss_status,
+            "faiss_count": faiss_index.ntotal if faiss_index else 0,
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }), 200
+    except Exception as e:
+        return jsonify({
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.datetime.utcnow().isoformat()
+        }), 503
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port, debug=False)
