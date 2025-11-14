@@ -44,14 +44,96 @@
             border-radius: 0;
         }
         
+        /* Camera height responsive */
+        .camera-height {
+            height: 300px;
+        }
+        
         /* Mobile camera optimizations */
         @media (max-width: 768px) {
+            .camera-height {
+                height: 250px;
+            }
             .camera-container {
                 min-height: 250px !important;
             }
             
             .video-stream {
                 object-fit: cover;
+                transform: scaleX(-1); /* Mirror for front camera */
+            }
+            
+            /* Better mobile touch targets */
+            button {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            /* Mobile face detection overlay adjustments */
+            #detectionCanvas {
+                transform: scaleX(-1); /* Mirror canvas too */
+            }
+        }
+        
+        /* Detection success animation */
+        .detection-active {
+            animation: detectionPulse 2s ease-in-out;
+        }
+        
+        @keyframes detectionPulse {
+            0%, 100% { 
+                filter: brightness(1) saturate(1); 
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+            50% { 
+                filter: brightness(1.2) saturate(1.3); 
+                box-shadow: 0 0 20px 5px rgba(16, 185, 129, 0.3);
+            }
+        }
+        
+        /* Toast notification styles for mobile */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            max-width: 350px;
+            word-wrap: break-word;
+        }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast.success {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .toast.error {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        
+        .toast.info {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }
+        
+        @media (max-width: 768px) {
+            .toast {
+                top: 10px;
+                right: 10px;
+                left: 10px;
+                max-width: none;
+                transform: translateY(-100px);
+            }
+            
+            .toast.show {
+                transform: translateY(0);
             }
         }
         
@@ -246,33 +328,32 @@
                     
                     <!-- Video Container -->
                     <div id="videoContainer" class="relative w-full h-full hidden">
-                        <video id="videoFeed" class="w-full h-full object-cover" autoplay muted playsinline></video>
+                        <video id="videoFeed" class="video-stream" autoplay muted playsinline></video>
                         <canvas id="detectionCanvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
                         
-                        <!-- Accuracy Badge -->
-                        <div class="absolute top-2 sm:top-4 left-2 sm:left-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-2 sm:px-3 py-1 rounded-full text-xs sm:text-sm font-bold flex items-center shadow-lg">
+                        <!-- Advanced Features Badge -->
+                        <div class="absolute top-2 sm:top-4 left-2 sm:left-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-bold flex items-center shadow-lg">
                             <span class="pulse w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-1 sm:mr-2"></span>
-                            99.99% Accuracy
+                            <span id="systemBadge">Multi-Modal AI</span>
                         </div>
                         
-                        <!-- Detection Info Overlay -->
-                        <div class="absolute top-2 sm:top-4 right-2 sm:right-4 bg-black bg-opacity-80 text-white px-2 sm:px-3 py-1 sm:py-2 rounded-lg text-xs sm:text-sm backdrop-blur-sm">
-                            <div id="faceCount" class="font-semibold">0 faces detected</div>
-                            <div id="recognitionStatus" class="text-green-300 mt-1">Ready for recognition</div>
+                        <!-- Detection Info -->
+                        <div class="absolute top-2 sm:top-4 right-2 sm:right-4 bg-black bg-opacity-80 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-xs sm:text-sm backdrop-blur-sm">
+                            <div id="faceCount" class="font-semibold">Scanning...</div>
+                            <div id="recognitionStatus" class="text-green-300 mt-0.5 sm:mt-1 text-xs sm:text-sm">Ready</div>
                         </div>
                         
-                        <!-- Face Detection Notification -->
-                        <div id="faceDetectionAlert" class="absolute bottom-2 sm:bottom-4 left-2 sm:left-4 right-2 sm:right-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-2 rounded-lg text-xs sm:text-sm font-semibold hidden animate-pulse">
-                            <i class="fas fa-user-check mr-2"></i>
-                            <span id="detectionMessage">Processing face...</span>
+                        <!-- Attendance Success Alert -->
+                        <div id="attendanceAlert" class="absolute bottom-2 sm:bottom-4 left-2 sm:left-2 right-2 sm:right-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-center font-semibold hidden transform transition-all duration-300">
+                            <div id="attendanceMessage" class="text-sm sm:text-base"></div>
                         </div>
-                    </div>
-                    
-                    <!-- Loading Indicator -->
-                    <div id="cameraLoading" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
-                        <div class="text-white text-center">
-                            <div class="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-white mx-auto mb-2 sm:mb-4"></div>
-                            <p class="text-sm sm:text-base">Initializing Camera...</p>
+                        
+                        <!-- Loading Indicator -->
+                        <div id="cameraLoading" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+                            <div class="text-white text-center">
+                                <div class="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-white mx-auto mb-2 sm:mb-4"></div>
+                                <p class="text-xs sm:text-sm">Processing...</p>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -370,6 +451,12 @@
         var availableCameras = [];
         var currentCameraIndex = 0;
         var faceDetectionInterval = null;
+        var isProcessing = false;
+        var sessionStats = {
+            totalScans: 0,
+            successfulScans: 0,
+            attendanceCount: 0
+        };
 
         // Initialize dashboard
         document.addEventListener('DOMContentLoaded', function() {
@@ -377,12 +464,45 @@
             loadAttendanceChart();
             loadRecentActivity();
             
+            // Check system health and show advanced status
+            checkAdvancedSystemHealth();
+            
             // Auto-refresh every 30 seconds
             setInterval(() => {
                 loadStats();
                 loadRecentActivity();
             }, 30000);
         });
+
+        // Check Advanced System Health
+        async function checkAdvancedSystemHealth() {
+            try {
+                const response = await fetch('/api/detection_health');
+                const health = await response.json();
+                
+                console.log('🚀 Advanced System Health:', health);
+                
+                if (health.overall_health) {
+                    // Update system status indicators
+                    const systemBadge = document.getElementById('systemBadge');
+                    if (systemBadge) {
+                        if (health.components.ultra_recognition) {
+                            systemBadge.textContent = 'Ultra AI Ready';
+                            systemBadge.className = systemBadge.className.replace('from-purple-500 to-purple-600', 'from-green-500 to-green-600');
+                        } else if (health.components.deepface && health.components.mediapipe) {
+                            systemBadge.textContent = 'Enhanced AI Ready';
+                            systemBadge.className = systemBadge.className.replace('from-purple-500 to-purple-600', 'from-blue-500 to-blue-600');
+                        }
+                    }
+                    
+                    showToast(`${health.recommendation} - 99.99% accuracy`, 'success');
+                } else {
+                    showToast('Basic detection available', 'warning');
+                }
+            } catch (error) {
+                console.error('Health check failed:', error);
+            }
+        }
 
         // Sidebar toggle function
         function toggleSidebar() {
@@ -613,16 +733,35 @@
                             const formData = new FormData();
                             formData.append('frame', blob, 'frame.jpg');
                             
-                            const response = await fetch('/api/detect_face', {
+                            // Try advanced multi-modal detection first
+                            let response = await fetch('/api/detect_face_ultra', {
                                 method: 'POST',
                                 body: formData
                             });
+                            
+                            // Fallback to enhanced detection if ultra fails
+                            if (!response.ok) {
+                                console.log('🔄 Ultra detection failed, trying enhanced...');
+                                response = await fetch('/api/detect_face_public', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                            }
                             
                             const result = await response.json();
                             
                             if (result.status === 'success') {
                                 const faceCount = result.faces_detected;
                                 document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
+                                
+                                // Update system badge with advanced processing info
+                                if (result.advanced_processing) {
+                                    const models = result.advanced_processing.models_used || [];
+                                    const badge = document.getElementById('systemBadge');
+                                    if (badge) {
+                                        badge.textContent = models.length > 1 ? `${models.length} Models Active` : 'Multi-Modal AI';
+                                    }
+                                }
                                 
                                 if (faceCount > 0 && result.faces && result.faces.length > 0) {
                                     cameraStats.totalDetections++;
@@ -677,8 +816,19 @@
                                 console.warn('Face detection API error:', result.message);
                             }
                         } catch (error) {
-                            console.error('Face detection request error:', error);
-                            // Don't show error to user for network issues, just continue
+                            console.error('🚨 Face detection request error:', error);
+                            
+                            // Handle different types of errors
+                            if (error.message.includes('502')) {
+                                document.getElementById('recognitionStatus').textContent = 'Server temporarily unavailable';
+                                document.getElementById('recognitionStatus').className = 'text-yellow-400 mt-0.5 sm:mt-1 text-xs sm:text-sm';
+                            } else if (error.message.includes('500')) {
+                                document.getElementById('recognitionStatus').textContent = 'Server error - check system';
+                                document.getElementById('recognitionStatus').className = 'text-red-400 mt-0.5 sm:mt-1 text-xs sm:text-sm';
+                            } else {
+                                // Network or other issues - don't show persistent error to user
+                                console.warn('Network issue, continuing...');
+                            }
                         } finally {
                             isProcessing = false;
                         }
