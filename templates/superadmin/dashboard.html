@@ -343,6 +343,11 @@
                             <div id="recognitionStatus" class="text-green-300 mt-0.5 sm:mt-1 text-xs sm:text-sm">Ready</div>
                         </div>
                         
+                        <!-- Face Detection Alert -->
+                        <div id="faceDetectionAlert" class="absolute bottom-14 sm:bottom-16 left-2 sm:left-2 right-2 sm:right-2 bg-gradient-to-r from-blue-500 to-purple-600 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-center font-semibold hidden transform transition-all duration-300">
+                            <div id="detectionMessage" class="text-sm sm:text-base"></div>
+                        </div>
+                        
                         <!-- Attendance Success Alert -->
                         <div id="attendanceAlert" class="absolute bottom-2 sm:bottom-4 left-2 sm:left-2 right-2 sm:right-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-center font-semibold hidden transform transition-all duration-300">
                             <div id="attendanceMessage" class="text-sm sm:text-base"></div>
@@ -633,25 +638,53 @@
 
         async function startCamera() {
             try {
-                // Mobile-optimized constraints
+                // Mobile-optimized constraints with fallback
                 const isMobile = window.innerWidth <= 768;
-                const constraints = {
+                
+                // First try with preferred constraints
+                let constraints = {
                     video: {
-                        width: { ideal: isMobile ? 720 : 1280 },
-                        height: { ideal: isMobile ? 480 : 720 },
-                        frameRate: { ideal: isMobile ? 24 : 30 },
-                        facingMode: isMobile ? 'user' : undefined, // Front camera on mobile
-                        deviceId: availableCameras.length > 0 && !isMobile ? 
-                            { exact: availableCameras[currentCameraIndex].deviceId } : undefined
+                        width: { min: 320, ideal: isMobile ? 640 : 1280, max: 1920 },
+                        height: { min: 240, ideal: isMobile ? 480 : 720, max: 1080 },
+                        frameRate: { min: 15, ideal: isMobile ? 24 : 30, max: 60 },
+                        facingMode: isMobile ? 'user' : 'environment'
                     }
                 };
+                
+                // If we have specific camera on desktop, use it
+                if (availableCameras.length > 0 && !isMobile && availableCameras[currentCameraIndex]) {
+                    constraints.video.deviceId = { ideal: availableCameras[currentCameraIndex].deviceId };
+                }
 
                 // Stop existing stream
                 if (currentStream) {
                     currentStream.getTracks().forEach(track => track.stop());
                 }
 
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                // Try to get camera with preferred constraints, fallback if needed
+                try {
+                    console.log('📱 Trying camera with constraints:', constraints);
+                    currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (constraintError) {
+                    console.warn('⚠️ Preferred constraints failed, trying basic fallback:', constraintError);
+                    // Fallback to basic constraints
+                    constraints = {
+                        video: {
+                            width: { ideal: 640 },
+                            height: { ideal: 480 },
+                            facingMode: isMobile ? 'user' : 'environment'
+                        }
+                    };
+                    
+                    try {
+                        currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                    } catch (basicError) {
+                        console.warn('⚠️ Basic constraints failed, trying minimal fallback:', basicError);
+                        // Final fallback - just ask for any video
+                        currentStream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    }
+                }
+
                 const videoFeed = document.getElementById('videoFeed');
                 videoFeed.srcObject = currentStream;
                 
@@ -846,42 +879,156 @@
             const canvas = document.getElementById('detectionCanvas');
             const video = document.getElementById('videoFeed');
             
-            if (!canvas || !video) return;
+            if (!canvas || !video) {
+                console.warn('⚠️ Canvas or video element not found for bounding boxes');
+                return;
+            }
             
-            // Resize canvas to match video
-            canvas.width = video.offsetWidth;
-            canvas.height = video.offsetHeight;
+            // Ensure canvas matches video dimensions
+            const videoRect = video.getBoundingClientRect();
+            canvas.width = videoRect.width;
+            canvas.height = videoRect.height;
             
             const ctx = canvas.getContext('2d');
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             
-            // Calculate scale factors
-            const scaleX = canvas.width / video.videoWidth;
-            const scaleY = canvas.height / video.videoHeight;
+            // Calculate scale factors based on actual video dimensions
+            const scaleX = canvas.width / video.videoWidth || 1;
+            const scaleY = canvas.height / video.videoHeight || 1;
             
-            faces.forEach(face => {
+            console.log('📊 Drawing bounding boxes for', faces.length, 'faces');
+            console.log('📐 Canvas:', canvas.width, 'x', canvas.height, '| Video:', video.videoWidth, 'x', video.videoHeight);
+            console.log('📏 Scale factors:', scaleX.toFixed(2), 'x', scaleY.toFixed(2));
+            
+            faces.forEach((face, index) => {
                 if (face.bbox) {
-                    const x = face.bbox.x * scaleX;
-                    const y = face.bbox.y * scaleY;
-                    const width = face.bbox.width * scaleX;
-                    const height = face.bbox.height * scaleY;
+                    const x = Math.round(face.bbox.x * scaleX);
+                    const y = Math.round(face.bbox.y * scaleY);
+                    const width = Math.round(face.bbox.width * scaleX);
+                    const height = Math.round(face.bbox.height * scaleY);
                     
-                    // Draw bounding box
-                    ctx.strokeStyle = face.recognized ? '#10b981' : '#ef4444'; // green if recognized, red if not
-                    ctx.lineWidth = 3;
+                    console.log(`🎯 Face ${index + 1} bbox:`, {x, y, width, height}, 'recognized:', face.recognized);
+                    
+                    // Determine colors based on recognition status
+                    const isRecognized = face.recognized;
+                    const primaryColor = isRecognized ? '#10b981' : '#f59e0b'; // Green for recognized, yellow for unknown
+                    const shadowColor = isRecognized ? '#059669' : '#d97706';
+                    
+                    // Draw shadow/glow effect
+                    ctx.shadowColor = shadowColor;
+                    ctx.shadowBlur = 8;
+                    ctx.shadowOffsetX = 2;
+                    ctx.shadowOffsetY = 2;
+                    
+                    // Draw main bounding box
+                    ctx.strokeStyle = primaryColor;
+                    ctx.lineWidth = 4;
                     ctx.strokeRect(x, y, width, height);
                     
-                    // Draw name label if recognized
-                    if (face.recognized && face.name) {
-                        ctx.fillStyle = face.recognized ? '#10b981' : '#ef4444';
-                        ctx.fillRect(x, y - 30, width, 25);
+                    // Draw corner brackets for better visibility
+                    const cornerLength = 20;
+                    ctx.lineWidth = 6;
+                    
+                    // Top-left corner
+                    ctx.beginPath();
+                    ctx.moveTo(x, y + cornerLength);
+                    ctx.lineTo(x, y);
+                    ctx.lineTo(x + cornerLength, y);
+                    ctx.stroke();
+                    
+                    // Top-right corner
+                    ctx.beginPath();
+                    ctx.moveTo(x + width - cornerLength, y);
+                    ctx.lineTo(x + width, y);
+                    ctx.lineTo(x + width, y + cornerLength);
+                    ctx.stroke();
+                    
+                    // Bottom-left corner
+                    ctx.beginPath();
+                    ctx.moveTo(x, y + height - cornerLength);
+                    ctx.lineTo(x, y + height);
+                    ctx.lineTo(x + cornerLength, y + height);
+                    ctx.stroke();
+                    
+                    // Bottom-right corner
+                    ctx.beginPath();
+                    ctx.moveTo(x + width - cornerLength, y + height);
+                    ctx.lineTo(x + width, y + height);
+                    ctx.lineTo(x + width, y + height - cornerLength);
+                    ctx.stroke();
+                    
+                    // Reset shadow
+                    ctx.shadowColor = 'transparent';
+                    ctx.shadowBlur = 0;
+                    ctx.shadowOffsetX = 0;
+                    ctx.shadowOffsetY = 0;
+                    
+                    // Draw label
+                    const labelText = isRecognized 
+                        ? `${face.name} (${(face.match_confidence * 100).toFixed(1)}%)`
+                        : 'Unknown Person';
+                    
+                    // Measure text for background
+                    ctx.font = 'bold 16px Arial';
+                    const textMetrics = ctx.measureText(labelText);
+                    const textWidth = textMetrics.width + 16;
+                    const textHeight = 28;
+                    
+                    // Position label (above box if space, otherwise below)
+                    let labelX = Math.max(0, Math.min(x, canvas.width - textWidth));
+                    let labelY = y > textHeight + 5 ? y - 5 : y + height + textHeight + 5;
+                    
+                    // Draw label background with gradient
+                    const gradient = ctx.createLinearGradient(labelX, labelY - textHeight, labelX, labelY);
+                    gradient.addColorStop(0, isRecognized ? '#10b981' : '#f59e0b');
+                    gradient.addColorStop(1, isRecognized ? '#059669' : '#d97706');
+                    
+                    ctx.fillStyle = gradient;
+                    ctx.fillRect(labelX, labelY - textHeight, textWidth, textHeight);
+                    
+                    // Draw label border
+                    ctx.strokeStyle = isRecognized ? '#047857' : '#b45309';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(labelX, labelY - textHeight, textWidth, textHeight);
+                    
+                    // Draw label text
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 16px Arial';
+                    ctx.textAlign = 'center';
+                    ctx.fillText(labelText, labelX + textWidth / 2, labelY - 8);
+                    
+                    // Draw confidence bar if recognized
+                    if (isRecognized && face.match_confidence) {
+                        const barWidth = width * 0.8;
+                        const barHeight = 6;
+                        const barX = x + (width - barWidth) / 2;
+                        const barY = y + height + 8;
                         
-                        ctx.fillStyle = 'white';
-                        ctx.font = '14px Arial';
-                        ctx.fillText(`${face.name} (${(face.match_confidence * 100).toFixed(1)}%)`, x + 5, y - 10);
+                        // Background bar
+                        ctx.fillStyle = 'rgba(255, 255, 255, 0.3)';
+                        ctx.fillRect(barX, barY, barWidth, barHeight);
+                        
+                        // Confidence bar
+                        const confidenceWidth = barWidth * face.match_confidence;
+                        const confidenceGradient = ctx.createLinearGradient(barX, barY, barX + confidenceWidth, barY);
+                        confidenceGradient.addColorStop(0, '#10b981');
+                        confidenceGradient.addColorStop(1, '#34d399');
+                        
+                        ctx.fillStyle = confidenceGradient;
+                        ctx.fillRect(barX, barY, confidenceWidth, barHeight);
+                        
+                        // Border for confidence bar
+                        ctx.strokeStyle = '#059669';
+                        ctx.lineWidth = 1;
+                        ctx.strokeRect(barX, barY, barWidth, barHeight);
                     }
+                    
+                    // Reset text align
+                    ctx.textAlign = 'start';
                 }
             });
+            
+            console.log('✅ Bounding boxes drawn successfully');
         }
 
         function clearFaceBoundingBoxes() {
