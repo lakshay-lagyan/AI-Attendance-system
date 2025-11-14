@@ -1,8 +1,3 @@
-"""
-FIXED VERSION OF MAIN.PY - Production Ready Smart Attendance System
-This file fixes all critical bugs and integrates the new super admin module
-"""
-
 from flask import Flask, render_template, request, jsonify, Response, redirect, url_for, flash, session
 from pymongo import MongoClient
 from deepface import DeepFace
@@ -911,6 +906,7 @@ def superadmin_logs():
 def api_get_logs():
     """API endpoint to get system logs as JSON"""
     try:
+        
         limit = int(request.args.get("limit", 50))
         logs = list(system_logs_col.find().sort("timestamp", -1).limit(limit))
         
