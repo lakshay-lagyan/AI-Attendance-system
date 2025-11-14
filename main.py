@@ -1611,12 +1611,16 @@ def detect_face_enhanced():
 
 @app.route("/api/detect_face_ultra", methods=["POST"])
 def detect_face_ultra():
-    """Ultra-advanced face detection with state-of-the-art capabilities"""
+    """Ultra-advanced face detection with multi-modal architecture"""
     try:
-        # Test if ultra recognition module can be imported
+        # Test if advanced multi-modal system can be imported
         try:
-            from ultra_face_recognition import process_frame_ultra, ultra_recognizer
-            print("✅ Ultra face recognition module imported successfully")
+            from advanced_multimodal_face_recognition import process_frame_advanced, initialize_advanced_system
+            print("✅ Advanced multi-modal system imported successfully")
+            
+            # Initialize the advanced system
+            advanced_system = initialize_advanced_system()
+            print("🚀 Advanced multi-modal system initialized")
         except Exception as ie:
             print(f"❌ Ultra module error: {ie}")
             print("🔄 Falling back to enhanced detection...")
@@ -1641,36 +1645,42 @@ def detect_face_ultra():
                 "message": "Invalid image format"
             }), 400
 
-        print(f"🔬 Ultra-processing frame: {image.shape}")
+        print(f"🔬 Advanced multi-modal processing frame: {image.shape}")
         
-        # Process with ultra-advanced system
-        enhanced_faces = process_frame_ultra(image)
+        # Process with advanced multi-modal pipeline
+        result = process_frame_advanced(image)
         
-        # Match each detected face against database
+        # Process detection results
         final_results = []
         
-        for face in enhanced_faces:
-            if face.get('embedding') is not None:
-                print(f"🧠 Processing face {face.get('face_id', 'unknown')}: {face.get('description', '')}")
-                
-                # Search in FAISS database
-                match_result = search_face_faiss(face['embedding'], image=image)
-                
-                face_result = {
-                    "bbox": {"x": face['bbox'][0], "y": face['bbox'][1], 
-                            "width": face['bbox'][2], "height": face['bbox'][3]},
-                    "confidence": float(face['confidence']),
-                    "detected": True,
-                    "face_id": face.get('face_id', 0),
-                    "quality": face['quality'],
-                    "pose": face.get('pose', {}),
-                    "stability": face.get('stability', 0.0),
-                    "description": face.get('description', ''),
-                    "tracking_info": {
-                        "tracked": face.get('face_id') is not None,
-                        "stability_score": face.get('stability', 0.0)
+        if result['status'] == 'success' and result.get('faces'):
+            for face in result['faces']:
+                # Extract face features if available
+                features = face.get('features')
+                if features is not None:
+                    print(f"🧠 Processing face {face.get('track_id', 'unknown')}")
+                    
+                    # Search in FAISS database
+                    match_result = search_face_faiss(features, image=image)
+                    
+                    face_result = {
+                        "bbox": face['bbox'],
+                        "confidence": float(face.get('confidence', 0)),
+                        "ensemble_confidence": float(face.get('ensemble_confidence', 0)),  
+                        "detected": True,
+                        "face_id": face.get('track_id', 0),
+                        "quality": face.get('quality', {'overall': 0.5}),
+                        "stability": face.get('track_stability', 0.0),
+                        "description": f"Advanced multi-modal detection",
+                        "model": face.get('model', 'ensemble'),
+                        "tracking_info": {
+                            "track_id": face.get('track_id'),
+                            "frame_number": face.get('frame_number', 0),
+                            "smoothed_confidence": face.get('smoothed_confidence', 0)
+                        },
+                        "environment": result.get('environment', {}),
+                        "enhanced": face.get('enhanced', False)
                     }
-                }
                 
                 if match_result and isinstance(match_result, dict) and match_result.get('name') != 'Unknown':
                     print(f"✨ Ultra-recognition: {match_result['name']} (confidence: {match_result.get('confidence', 0):.3f})")
@@ -1767,16 +1777,19 @@ def detect_face_ultra():
             else:
                 print("⚠️ No embedding generated for face")
         
-        # Ultra-enhanced response
+        # Advanced multi-modal response
         response_data = {
             "status": "success",
             "faces_detected": len(final_results),
             "faces": final_results,
             "timestamp": datetime.datetime.utcnow().isoformat(),
-            "ultra_processing": {
-                "image_enhanced": True,
-                "multi_scale_detection": True,
-                "pose_analysis": True,
+            "advanced_processing": {
+                "multi_modal_ensemble": True,
+                "models_used": result.get('processing_stats', {}).get('models_used', []),
+                "super_resolution": True,
+                "quality_assessment": True,
+                "temporal_tracking": True,
+                "environmental_adaptation": True,
                 "quality_assessment": True,
                 "face_tracking": True,
                 "total_faces": len(final_results),

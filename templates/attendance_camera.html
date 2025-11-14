@@ -223,7 +223,7 @@
                     <!-- Accuracy Badge -->
                     <div class="absolute top-4 left-4 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-4 py-2 rounded-full text-sm font-bold flex items-center shadow-lg">
                         <span class="pulse w-2 h-2 bg-white rounded-full mr-2"></span>
-                        99.99% Accuracy
+                        <span id="accuracyBadge">Multi-Modal AI</span>
                     </div>
                     
                     <!-- Detection Info -->
@@ -563,6 +563,13 @@
                             if (result && result.status === 'success') {
                                 const faceCount = result.faces_detected;
                                 document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
+                                
+                                // Update accuracy badge with advanced info
+                                if (result.advanced_processing) {
+                                    const models = result.advanced_processing.models_used || [];
+                                    const badge = document.getElementById('accuracyBadge');
+                                    badge.textContent = models.length > 1 ? `${models.length} Models` : 'Multi-Modal AI';
+                                }
                                 
                                 // Draw all faces with their labels
                                 if (faceCount > 0 && result.faces && result.faces.length > 0) {
