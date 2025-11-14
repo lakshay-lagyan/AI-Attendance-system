@@ -302,16 +302,13 @@
             }
         }
 
-        // Global variables
-        let cameraActive = false;
-        let currentStream = null;
-        let detectionInterval = null;
-        let isProcessing = false;
-        let currentCameraIndex = 0;
-        let availableCameras = [];
-
         // Camera toggle function
         window.toggleCamera = async function() {
+            const toggleBtn = document.getElementById('toggleCamera');
+            const switchBtn = document.getElementById('switchCamera');
+            const placeholder = document.getElementById('cameraPlaceholder');
+            const videoContainer = document.getElementById('videoContainer');
+            const liveIndicator = document.getElementById('liveIndicator');
             
             if (!cameraActive) {
                 try {
@@ -324,9 +321,10 @@
                     showLoading(false);
                     placeholder.classList.add('hidden');
                     videoContainer.classList.remove('hidden');
+                    liveIndicator.classList.remove('hidden');
                     
                     toggleBtn.innerHTML = '<i class="fas fa-stop mr-2"></i><span>Stop Camera</span>';
-                    toggleBtn.className = toggleBtn.className.replace('bg-purple-600 hover:bg-purple-700 active:bg-purple-800', 'bg-red-600 hover:bg-red-700 active:bg-red-800');
+                    toggleBtn.className = 'flex-1 sm:flex-initial bg-red-600 hover:bg-red-700 active:bg-red-800 text-white px-6 py-3 rounded-lg transition-all duration-300 flex items-center justify-center font-semibold';
                     
                     if (availableCameras.length > 1) {
                         switchBtn.classList.remove('hidden');
@@ -844,10 +842,12 @@
 
         function showLoading(show) {
             const loading = document.getElementById('cameraLoading');
-            if (show) {
-                loading.classList.remove('hidden');
-            } else {
-                loading.classList.add('hidden');
+            if (loading) {
+                if (show) {
+                    loading.classList.remove('hidden');
+                } else {
+                    loading.classList.add('hidden');
+                }
             }
         }
 
