@@ -90,6 +90,7 @@
             text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
         }
         
+        /* Toast notification styles */
         .toast {
             position: fixed;
             top: 20px;
@@ -99,14 +100,31 @@
             color: white;
             font-weight: 600;
             z-index: 1000;
-            transform: translateX(100%);
+            transform: translateX(400px);
             transition: transform 0.3s ease;
             max-width: 350px;
+            word-wrap: break-word;
         }
-        .toast.show { transform: translateX(0); }
-        .toast.success { background: #10b981; }
-        .toast.error { background: #ef4444; }
-        .toast.info { background: #3b82f6; }
+        
+        .toast.show {
+            transform: translateX(0);
+        }
+        
+        .toast.success {
+            background: linear-gradient(135deg, #10b981, #059669);
+        }
+        
+        .toast.error {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+        }
+        
+        .toast.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+        }
+        
+        .toast.info {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
+        }
         
         @media (max-width: 768px) {
             .camera-container {
@@ -374,6 +392,23 @@
             }
         }
 
+        // Switch camera function
+        window.switchCamera = async function() {
+            if (availableCameras.length <= 1) {
+                showToast('No additional cameras available', 'warning');
+                return;
+            }
+            
+            try {
+                currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
+                await startCamera();
+                showToast(`Switched to camera ${currentCameraIndex + 1}`, 'info');
+            } catch (error) {
+                console.error('Camera switch error:', error);
+                showToast('Failed to switch camera', 'error');
+            }
+        };
+
         // Start camera function
         async function startCamera() {
             try {
@@ -466,21 +501,66 @@
                             sessionStats.totalScans++;
                             updateStats();
                             
+                            // Create formData once for all API calls
                             const formData = new FormData();
                             formData.append('frame', blob, 'frame.jpg');
                             
-                            const response = await fetch('/api/detect_face_ultra', {
-                                method: 'POST',
-                                body: formData
-                            });
+                            let response;
+                            let result;
                             
-                            if (!response.ok) {
-                                throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                            // Try ultra detection first
+                            try {
+                                response = await fetch('/api/detect_face_ultra', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                                
+                                if (!response.ok) {
+                                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                                }
+                                
+                                result = await response.json();
+                                console.log('✅ Ultra detection successful');
+                                
+                            } catch (ultraError) {
+                                console.error('❌ Ultra detection failed:', ultraError.message);
+                                
+                                // Try enhanced fallback
+                                try {
+                                    console.log('🔄 Trying enhanced detection...');
+                                    response = await fetch('/api/detect_face_public', {
+                                        method: 'POST',
+                                        body: formData
+                                    });
+                                    
+                                    if (!response.ok) {
+                                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                                    }
+                                    
+                                    result = await response.json();
+                                    console.log('✅ Enhanced detection successful');
+                                    
+                                } catch (enhancedError) {
+                                    console.error('❌ Enhanced detection failed:', enhancedError.message);
+                                    
+                                    // Try simple OpenCV detection as last resort
+                                    console.log('🔄 Trying simple OpenCV detection...');
+                                    response = await fetch('/api/detect_face_simple', {
+                                        method: 'POST',
+                                        body: formData
+                                    });
+                                    
+                                    if (!response.ok) {
+                                        throw new Error(`All detection methods failed`);
+                                    }
+                                    
+                                    result = await response.json();
+                                    console.log('✅ Simple detection working');
+                                }
                             }
                             
-                            const result = await response.json();
-                            
-                            if (result.status === 'success') {
+                            // Process the successful result
+                            if (result && result.status === 'success') {
                                 const faceCount = result.faces_detected;
                                 document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
                                 
@@ -543,114 +623,21 @@
                                     clearCanvas();
                                 }
                             }
-                        } catch (error) {  
-                            console.error('Ultra detection error:', error);
+                        } catch (error) {
+                            console.error('🚨 All face detection methods failed:', error);
                             
-                            // Show specific error information
-                            let errorDetail = error.message || 'Unknown error';
-                            console.log(`❌ Ultra detection failed: ${errorDetail}`);
+                            // Show error message to user
+                            document.getElementById('recognitionStatus').textContent = 'Detection system unavailable';
+                            document.getElementById('recognitionStatus').className = 'text-red-400 mt-1';
+                            document.getElementById('faceCount').textContent = 'System error';
                             
-                            // Fallback to regular detection API
-                            try {
-                                console.log('🔄 Falling back to regular detection...');
-                                const fallbackResponse = await fetch('/api/detect_face_public', {
-                                    method: 'POST',
-                                    body: formData
-                                });
-                                
-                                if (fallbackResponse.ok) {
-                                    const fallbackResult = await fallbackResponse.json();
-                                    console.log('✅ Fallback detection successful');
-                                    
-                                    // Process fallback result same as ultra result
-                                    if (fallbackResult.status === 'success') {
-                                        const faceCount = fallbackResult.faces_detected;
-                                        document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
-                                        
-                                        if (faceCount > 0 && fallbackResult.faces && fallbackResult.faces.length > 0) {
-                                            const face = fallbackResult.faces[0];
-                                            
-                                            if (face.recognized) {
-                                                sessionStats.successfulScans++;
-                                                updateStats();
-                                                
-                                                const confidence = (face.match_confidence * 100).toFixed(1);
-                                                
-                                                document.getElementById('recognitionStatus').textContent = `${face.name} (${confidence}%)`;
-                                                document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
-                                                
-                                                if (face.attendance_marked) {
-                                                    sessionStats.attendanceCount++;
-                                                    updateStats();
-                                                    
-                                                    showSuccessAlert(`Welcome ${face.name}! Attendance marked successfully.`);
-                                                    showToast(`Attendance marked for ${face.name}`, 'success');
-                                                    
-                                                    // Add success effect
-                                                    video.classList.add('detection-active');
-                                                    setTimeout(() => video.classList.remove('detection-active'), 3000);
-                                                } else if (face.already_marked) {
-                                                    showSuccessAlert(`Hello ${face.name}! Your attendance was already marked today.`);
-                                                    showToast(`${face.name} - Already marked today`, 'info');
-                                                }
-                                                
-                                                drawFaceBoundingBox([face], face.recognized);
-                                            } else {
-                                                document.getElementById('recognitionStatus').textContent = 'Face not recognized';
-                                                document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
-                                                drawFaceBoundingBox([face], null);
-                                            }
-                                        }
-                                    }
-                                } else {
-                                    throw new Error('Fallback detection also failed');
-                                }
-                            } catch (fallbackError) {
-                                console.error('Fallback detection error:', fallbackError);
-                                
-                                // Try simple OpenCV detection as last resort
-                                try {
-                                    console.log('🔄 Trying simple OpenCV detection...');
-                                    const simpleResponse = await fetch('/api/detect_face_simple', {
-                                        method: 'POST',
-                                        body: formData
-                                    });
-                                    
-                                    if (simpleResponse.ok) {
-                                        const simpleResult = await simpleResponse.json();
-                                        console.log('✅ Simple detection working');
-                                        
-                                        if (simpleResult.status === 'success') {
-                                            const faceCount = simpleResult.faces_detected;
-                                            document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected (basic mode)`;
-                                            
-                                            if (faceCount > 0) {
-                                                drawFaceBoundingBox(simpleResult.faces, null);
-                                                document.getElementById('recognitionStatus').textContent = 'Face detected - basic mode (no recognition)';
-                                                document.getElementById('recognitionStatus').className = 'text-yellow-300 mt-1';
-                                                showToast('Basic face detection active - recognition unavailable', 'warning');
-                                            }
-                                        }
-                                    } else {
-                                        throw new Error('Simple detection also failed');
-                                    }
-                                } catch (simpleError) {
-                                    console.error('Simple detection error:', simpleError);
-                                    
-                                    // Show detailed error message
-                                    let errorMsg = 'All face detection systems unavailable';
-                                    if (fallbackError.message.includes('500')) {
-                                        errorMsg = 'Server error - please check system status';
-                                    } else if (fallbackError.message.includes('404')) {
-                                        errorMsg = 'Face detection API not found';
-                                    } else if (fallbackError.message.includes('network') || fallbackError.message.includes('fetch')) {
-                                        errorMsg = 'Network connection error';
-                                    }
-                                    
-                                    showToast(errorMsg, 'error');
-                                    document.getElementById('recognitionStatus').textContent = errorMsg;
-                                    document.getElementById('recognitionStatus').className = 'text-red-400 mt-1';
-                                }
+                            // Show appropriate error message
+                            if (error.message.includes('502')) {
+                                showToast('Server temporarily unavailable - please try again', 'error');
+                            } else if (error.message.includes('500')) {
+                                showToast('Server error - check system status', 'error');
+                            } else {
+                                showToast('Face detection unavailable', 'error');
                             }
                         } finally {
                             isProcessing = false;
