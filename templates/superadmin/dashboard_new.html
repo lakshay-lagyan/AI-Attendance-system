@@ -3,1167 +3,613 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Super Admin Dashboard - Smart Attendance</title>
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <title>Super Admin Dashboard - Smart Attendance System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     <style>
-        :root {
-            --sa-primary: #9333ea;
-            --sa-primary-dark: #7e22ce;
-            --sa-secondary: #581c87;
-            --sa-accent: #c084fc;
-            --sa-bg: #0f172a;
-            --sa-card-bg: #211d49;
-            --sa-text: #ffffff;
-            --sa-text-light: #f2f3f5;
-            --sa-border: #385379;
-            --sa-success: #10b981;
-            --sa-warning: #f59e0b;
-            --sa-danger: #ef4444;
-            --sa-info: #3b82f6;
+        .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .card-hover:hover { transform: translateY(-2px); transition: all 0.3s ease; }
+        .stat-card { background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); }
+        .stat-card-2 { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .stat-card-3 { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .stat-card-4 { background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); }
+        
+        /* Mobile Sidebar */
+        .sidebar-overlay { 
+            position: fixed; 
+            inset: 0; 
+            background: rgba(0,0,0,0.5); 
+            z-index: 40; 
+            display: none; 
         }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        .sidebar-overlay.active { display: block; }
+        
+        .sidebar { 
+            transform: translateX(-100%); 
+            transition: transform 0.3s ease; 
         }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: var(--sa-bg);
-            color: var(--sa-text);
-            overflow-x: hidden;
+        .sidebar.active { transform: translateX(0); }
+        
+        /* Enhanced Camera Styles */
+        .touch-manipulation {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
         }
-
-        /* 3D Sidebar */
-        .sidebar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 280px;
-            height: 100vh;
-            background: linear-gradient(180deg, var(--sa-primary) 0%, var(--sa-secondary) 100%);
-            z-index: 1000;
-            transition: transform 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            box-shadow: 5px 0 30px rgba(147, 51, 234, 0.3);
-            overflow-y: auto;
-        }
-
-        .sidebar.collapsed {
-            transform: translateX(-100%) rotateY(15deg);
-            transform-origin: right center;
-        }
-
-        .sidebar-header {
-            padding: 2rem 1.5rem;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            animation: fadeInDown 0.6s ease;
-        }
-
-        .sidebar-header h1 {
-            font-size: 1.5rem;
-            font-weight: 800;
-            margin: 0;
-            background: linear-gradient(135deg, #fff, #c084fc);
-            background-clip: text;
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            color: transparent;
-        }
-
-        .sidebar-nav {
-            padding: 1.5rem 1rem;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            padding: 1rem 1.25rem;
-            margin-bottom: 0.5rem;
-            color: rgba(255, 255, 255, 0.9);
-            text-decoration: none;
-            border-radius: 12px;
-            transition: all 0.3s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            position: relative;
-            overflow: hidden;
-            animation: slideInLeft 0.5s ease backwards;
-        }
-
-        .nav-link:nth-child(1) { animation-delay: 0.1s; }
-        .nav-link:nth-child(2) { animation-delay: 0.2s; }
-        .nav-link:nth-child(3) { animation-delay: 0.3s; }
-        .nav-link:nth-child(4) { animation-delay: 0.4s; }
-        .nav-link:nth-child(5) { animation-delay: 0.5s; }
-
-        @keyframes slideInLeft {
-            from {
-                opacity: 0;
-                transform: translateX(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .nav-link::before {
-            content: '';
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 4px;
-            height: 100%;
-            background: white;
-            transform: translateX(-100%);
-            transition: transform 0.3s;
-        }
-
-        .nav-link:hover, .nav-link.active {
-            background: rgba(255, 255, 255, 0.15);
-            transform: translateX(10px);
-        }
-
-        .nav-link:hover::before, .nav-link.active::before {
-            transform: translateX(0);
-        }
-
-        .nav-link i {
-            margin-right: 0.75rem;
-            width: 20px;
-            transition: transform 0.3s;
-        }
-
-        .nav-link:hover i {
-            transform: scale(1.2) rotate(5deg);
-        }
-
-        .logout-btn {
-            background: transparent;
-            border: 1px solid rgba(239, 68, 68, 0.5);
-            color: rgba(255, 255, 255, 0.9);
-            transition: all 0.3s;
-        }
-
-        .logout-btn:hover {
-            background: var(--sa-danger);
-            border-color: var(--sa-danger);
-            transform: translateX(10px);
-        }
-
-        /* Sidebar Overlay */
-        .sidebar-overlay {
-            position: fixed;
-            inset: 0;
-            background: rgba(0, 0, 0, 0.7);
-            z-index: 999;
-            opacity: 0;
-            visibility: hidden;
-            transition: all 0.3s;
-            backdrop-filter: blur(5px);
-        }
-
-        .sidebar-overlay.show {
-            opacity: 1;
-            visibility: visible;
-        }
-
-        /* Main Content */
-        .main-content {
-            margin-left: 280px;
-            transition: margin-left 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            min-height: 100vh;
-        }
-
-        .main-content.expanded {
-            margin-left: 0;
-        }
-
-        /* Topbar */
-        .topbar {
-            background: var(--sa-card-bg);
-            padding: 1.25rem 2rem;
-            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            animation: slideDown 0.5s ease;
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .menu-toggle {
-            background: var(--sa-primary);
-            color: white;
-            border: none;
-            width: 45px;
-            height: 45px;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.3s;
-            box-shadow: 0 4px 15px rgba(147, 51, 234, 0.4);
-        }
-
-        .menu-toggle:hover {
-            transform: scale(1.1) rotate(90deg);
-            box-shadow: 0 6px 20px rgba(147, 51, 234, 0.6);
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 1.5rem;
-            padding: 2rem;
-        }
-
-        .stat-card {
-            background: var(--sa-card-bg);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 8px 32px rgba(61, 22, 22, 0.3);
-            transition: all 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
-            position: relative;
-            overflow: hidden;
-            animation: fadeInUp 0.6s ease backwards;
-        }
-
-        .stat-card:nth-child(1) { animation-delay: 0.1s; }
-        .stat-card:nth-child(2) { animation-delay: 0.2s; }
-        .stat-card:nth-child(3) { animation-delay: 0.3s; }
-        .stat-card:nth-child(4) { animation-delay: 0.4s; }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--sa-primary), var(--sa-accent));
-        }
-
-        .stat-card:hover {
-            transform: translateY(-10px) scale(1.02);
-            box-shadow: 0 12px 40px rgba(128, 32, 218, 0.4);
-        }
-
-        .stat-content {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .stat-icon {
-            font-size: 2.5rem;
-            opacity: 0.3;
-            transition: all 0.3s;
-        }
-
-        .stat-card:hover .stat-icon {
-            opacity: 0.6;
-            transform: scale(1.1) rotate(10deg);
-        }
-
-        .stat-label {
-            font-size: 0.875rem;
-            color: var(--sa-text-light);
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 800;
-            line-height: 1;
-        }
-
-        .purple { color: var(--sa-primary); }
-        .blue { color: var(--sa-info); }
-        .green { color: var(--sa-success); }
-        .orange { color: var(--sa-warning); }
-
-        /* Enhanced Camera Section */
-        .content-section {
-            padding: 0 2rem 2rem 2rem;
-        }
-
-        .camera-card {
-            background: var(--sa-card-bg);
-            border-radius: 20px;
-            padding: 2rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-            margin-bottom: 2rem;
-            animation: scaleIn 0.5s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .camera-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 4px;
-            background: linear-gradient(90deg, #10b981, #3b82f6, #9333ea);
-            animation: shimmer 3s infinite;
-        }
-
-        @keyframes shimmer {
-            0% { transform: translateX(-100%); }
-            100% { transform: translateX(100%); }
-        }
-
-        @keyframes scaleIn {
-            from {
-                opacity: 0;
-                transform: scale(0.9);
-            }
-            to {
-                opacity: 1;
-                transform: scale(1);
-            }
-        }
-
-        .camera-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-            flex-wrap: wrap;
-            gap: 1rem;
-        }
-
-        .camera-header h3 {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            font-size: 1.5rem;
-        }
-
-        .live-dot {
-            width: 12px;
-            height: 12px;
-            background: #ef4444;
-            border-radius: 50%;
-            animation: pulse 2s infinite;
-            box-shadow: 0 0 15px #ef4444;
-        }
-
-        @keyframes pulse {
-            0%, 100% { opacity: 1; transform: scale(1); }
-            50% { opacity: 0.3; transform: scale(0.8); }
-        }
-
-        .camera-btn {
-            background: var(--sa-primary);
-            color: white;
-            border: none;
-            padding: 0.75rem 1.5rem;
-            border-radius: 12px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-
-        .camera-btn:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 8px 25px rgba(147, 51, 234, 0.5);
-        }
-
-        .camera-btn.stop {
-            background: var(--sa-danger);
-        }
-
-        .camera-container {
-            position: relative;
-            width: 100%;
-            background: linear-gradient(135deg, #000 0%, #1a1a2e 100%);
-            border-radius: 16px;
-            overflow: hidden;
-            min-height: 450px;
-            border: 2px solid rgba(147, 51, 234, 0.3);
-            box-shadow: inset 0 0 50px rgba(147, 51, 234, 0.1);
-        }
-
-        .camera-placeholder {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 450px;
-            color: var(--sa-text-light);
-        }
-
-        .camera-placeholder i {
-            font-size: 5rem;
-            opacity: 0.3;
-            margin-bottom: 1.5rem;
-        }
-
+        
         .video-stream {
             width: 100%;
-            height: auto;
-            display: block;
+            height: 100%;
+            object-fit: cover;
+            border-radius: 0;
         }
-
-        .video-overlay {
-            position: absolute;
+        
+        /* Camera height responsive */
+        .camera-height {
+            height: 300px;
+        }
+        
+        /* Mobile camera optimizations */
+        @media (max-width: 768px) {
+            .camera-height {
+                height: 250px;
+            }
+            .camera-container {
+                min-height: 250px !important;
+            }
+            
+            .video-stream {
+                object-fit: cover;
+                transform: scaleX(-1); /* Mirror for front camera */
+            }
+            
+            /* Better mobile touch targets */
+            button {
+                min-height: 44px;
+                min-width: 44px;
+            }
+            
+            /* Mobile face detection overlay adjustments */
+            #detectionCanvas {
+                transform: scaleX(-1); /* Mirror canvas too */
+            }
+        }
+        
+        /* Detection success animation */
+        .detection-active {
+            animation: detectionPulse 2s ease-in-out;
+        }
+        
+        @keyframes detectionPulse {
+            0%, 100% { 
+                filter: brightness(1) saturate(1); 
+                box-shadow: 0 0 0 0 rgba(16, 185, 129, 0);
+            }
+            50% { 
+                filter: brightness(1.2) saturate(1.3); 
+                box-shadow: 0 0 20px 5px rgba(16, 185, 129, 0.3);
+            }
+        }
+        
+        /* Toast notification styles for mobile */
+        .toast {
+            position: fixed;
             top: 20px;
             right: 20px;
-            background: rgba(0, 0, 0, 0.9);
-            backdrop-filter: blur(15px);
-            padding: 1rem 1.5rem;
-            border-radius: 12px;
-            display: flex;
-            flex-direction: column;
-            gap: 0.5rem;
-            border: 1px solid rgba(147, 51, 234, 0.5);
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
-        }
-
-        .face-detection-overlay {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(16, 185, 129, 0.9);
-            backdrop-filter: blur(15px);
-            padding: 0.75rem 1.25rem;
-            border-radius: 12px;
+            padding: 12px 20px;
+            border-radius: 8px;
             color: white;
             font-weight: 600;
-            display: none;
-            animation: slideInUp 0.3s ease;
+            z-index: 1000;
+            transform: translateX(400px);
+            transition: transform 0.3s ease;
+            max-width: 350px;
+            word-wrap: break-word;
         }
-
-        @keyframes slideInUp {
-            from { opacity: 0; transform: translateY(20px); }
-            to { opacity: 1; transform: translateY(0); }
+        
+        .toast.show {
+            transform: translateX(0);
         }
-
-        .accuracy-badge {
-            position: absolute;
-            top: 20px;
-            left: 20px;
+        
+        .toast.success {
             background: linear-gradient(135deg, #10b981, #059669);
-            color: white;
-            padding: 0.5rem 1rem;
-            border-radius: 20px;
-            font-size: 0.875rem;
-            font-weight: 700;
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.4);
         }
-
-        .pulse-dot {
-            width: 8px;
-            height: 8px;
-            background: #fff;
-            border-radius: 50%;
-            animation: pulse 1.5s infinite;
+        
+        .toast.error {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
         }
-
-        /* Real-time Section */
-        .realtime-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
-            gap: 2rem;
+        
+        .toast.info {
+            background: linear-gradient(135deg, #3b82f6, #2563eb);
         }
-
-        .realtime-card {
-            background: var(--sa-card-bg);
-            border-radius: 16px;
-            padding: 1.5rem;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-        }
-
-        .realtime-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 1.5rem;
-        }
-
-        .realtime-header h3 {
-            display: flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 1.25rem;
-        }
-
-        .refresh-btn {
-            background: transparent;
-            border: none;
-            color: var(--sa-accent);
-            cursor: pointer;
-            padding: 0.5rem;
-            border-radius: 8px;
-            transition: all 0.3s;
-        }
-
-        .refresh-btn:hover {
-            background: rgba(192, 132, 252, 0.1);
-            transform: rotate(180deg);
-        }
-
-        .attendance-list {
-            max-height: 500px;
-            overflow-y: auto;
-        }
-
-        .attendance-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem;
-            background: rgba(147, 51, 234, 0.05);
-            border-radius: 12px;
-            margin-bottom: 0.75rem;
-            transition: all 0.3s;
-        }
-
-        .attendance-item:hover {
-            background: rgba(147, 51, 234, 0.1);
-            transform: translateX(5px);
-        }
-
-        .user-avatar {
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            background: var(--sa-primary);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 700;
-        }
-
-        .badge {
-            padding: 0.35rem 0.85rem;
-            border-radius: 8px;
-            font-size: 0.75rem;
-            font-weight: 700;
-        }
-
-        .badge-success {
-            background: rgba(16, 185, 129, 0.2);
-            color: var(--sa-success);
-        }
-
-        /* Charts */
-        .chart-container {
-            position: relative;
-            height: 300px;
-            margin-top: 1rem;
-        }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-
-        ::-webkit-scrollbar-track {
-            background: var(--sa-bg);
-        }
-
-        ::-webkit-scrollbar-thumb {
-            background: var(--sa-primary);
-            border-radius: 4px;
-        }
-
-        ::-webkit-scrollbar-thumb:hover {
-            background: var(--sa-accent);
-        }
-
-        /* Responsive */
-        @media (max-width: 1024px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-
-            .sidebar.active {
-                transform: translateX(0);
-            }
-
-            .main-content {
-                margin-left: 0;
-            }
-
-            .realtime-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
+        
         @media (max-width: 768px) {
-            .stats-grid {
-                grid-template-columns: 1fr;
-                padding: 1rem;
-            }
-
-            .content-section {
-                padding: 0 1rem 1rem 1rem;
-            }
-
-            .topbar {
-                padding: 1rem;
-            }
-
-            .camera-header {
-                flex-direction: column;
-                align-items: flex-start;
-            }
-
-            .camera-container {
-                min-height: 300px;
-            }
-
-            .camera-placeholder {
-                min-height: 300px;
-            }
-
-            .realtime-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .video-overlay {
+            .toast {
                 top: 10px;
                 right: 10px;
-                padding: 0.75rem 1rem;
-                font-size: 0.875rem;
+                left: 10px;
+                max-width: none;
+                transform: translateY(-100px);
+            }
+            
+            .toast.show {
+                transform: translateY(0);
             }
         }
-
-        @media (max-width: 576px) {
-            .stat-value {
-                font-size: 1.5rem;
-            }
-
-            .camera-card {
-                padding: 1rem;
-            }
+        
+        /* Camera loading animation */
+        @keyframes cameraInit {
+            0% { opacity: 0; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
         }
+        
+        .camera-ready {
+            animation: cameraInit 0.5s ease-out;
+        }
+        
+        /* Face detection pulse effect */
+        @keyframes detectPulse {
+            0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(34, 197, 94, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); }
+        }
+        
+        .detection-active {
+            animation: detectPulse 2s infinite;
+        }
+        
+        .camera-height {
+            min-height: 280px;
+            max-height: 500px;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .pulse { animation: pulse 2s infinite; }
+        
+        /* Toast Notifications */
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            z-index: 1000;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+        
+        .toast.show { transform: translateX(0); }
+        .toast.success { background: #10b981; }
+        .toast.error { background: #ef4444; }
+        .toast.info { background: #3b82f6; }
     </style>
 </head>
-<body>
+<body class="bg-gray-100 min-h-screen">
     <!-- Sidebar Overlay -->
-    <div class="sidebar-overlay" id="sidebarOverlay"></div>
-
-    <!-- Sidebar -->
-    <nav class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <h1><i class="fas fa-shield-alt"></i> Smart Attendance</h1>
-            <p style="opacity: 0.7; font-size: 0.875rem; margin-top: 0.5rem;">Super Admin</p>
-        </div>
-        
-        <div class="sidebar-nav">
-            <a href="/superadmin/dashboard" class="nav-link active">
-                <i class="fas fa-tachometer-alt"></i> Dashboard
-            </a>
-            <a href="/superadmin/cameras" class="nav-link">
-                <i class="fas fa-video"></i> Camera Manager
-            </a>
-            <a href="/superadmin/admins" class="nav-link">
-                <i class="fas fa-user-shield"></i> Manage Admins
-            </a>
-            <a href="/superadmin/users" class="nav-link">
-                <i class="fas fa-users"></i> All Users
-            </a>
-            <a href="/superadmin/logs" class="nav-link">
-                <i class="fas fa-clipboard-list"></i> System Logs
-            </a>
-            <button onclick="logout()" class="nav-link logout-btn" style="width: 100%; cursor: pointer;">
-                <i class="fas fa-sign-out-alt"></i> Logout
-            </button>
+    <div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+    
+    <!-- Navigation -->
+    <nav class="gradient-bg shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <button id="menuToggle" onclick="toggleSidebar()" class="lg:hidden text-white mr-3 p-2 rounded-md hover:bg-white/10">
+                        <i class="fas fa-bars text-xl"></i>
+                    </button>
+                    <i class="fas fa-shield-alt text-white text-2xl mr-3"></i>
+                    <h1 class="text-white text-xl font-bold">Super Admin Dashboard</h1>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <div class="text-white hidden sm:block">
+                        <i class="fas fa-user-circle mr-2"></i>
+                        {{ superadmin.name or superadmin.email }}
+                    </div>
+                    <a href="{{ url_for('logout') }}" class="bg-red-500 hover:bg-red-600 text-white px-4 py-2 rounded-lg transition duration-300">
+                        <i class="fas fa-sign-out-alt mr-2"></i><span class="hidden sm:inline">Logout</span>
+                    </a>
+                </div>
+            </div>
         </div>
     </nav>
 
-    <!-- Main Content -->
-    <div class="main-content" id="mainContent">
-        <!-- Topbar -->
-        <div class="topbar">
-            <div style="display: flex; align-items: center; gap: 1rem;">
-                <button class="menu-toggle" id="menuToggle">
-                    <i class="fas fa-bars"></i>
-                </button>
-                <h2 style="margin: 0; font-size: 1.5rem;">Dashboard</h2>
-            </div>
-            <div id="userInfo" style="text-align: right;">
-                <div style="font-weight: 600;">Super Admin</div>
-                <small style="color: var(--sa-text-light);">Administrator</small>
-            </div>
-        </div>
-
-        <!-- Stats Grid -->
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div>
-                        <div class="stat-label">Total Admins</div>
-                        <div class="stat-value purple" id="totalAdmins">0</div>
-                    </div>
-                    <i class="fas fa-user-shield stat-icon purple"></i>
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div>
-                        <div class="stat-label">Total Users</div>
-                        <div class="stat-value blue" id="totalUsers">0</div>
-                    </div>
-                    <i class="fas fa-users stat-icon blue"></i>
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div>
-                        <div class="stat-label">Enrolled Persons</div>
-                        <div class="stat-value green" id="totalPersons">0</div>
-                    </div>
-                    <i class="fas fa-id-card stat-icon green"></i>
-                </div>
-            </div>
-
-            <div class="stat-card">
-                <div class="stat-content">
-                    <div>
-                        <div class="stat-label">Today's Attendance</div>
-                        <div class="stat-value orange" id="todayAttendance">0</div>
-                    </div>
-                    <i class="fas fa-calendar-check stat-icon orange"></i>
-                </div>
+    <div class="flex">
+        <!-- Sidebar -->
+        <div id="sidebar" class="sidebar fixed lg:static lg:translate-x-0 w-64 bg-white shadow-lg min-h-screen z-50">
+            <div class="p-6">
+                <nav class="space-y-2">
+                    <a href="{{ url_for('superadmin.dashboard') }}" class="flex items-center px-4 py-3 text-gray-700 bg-blue-50 rounded-lg">
+                        <i class="fas fa-tachometer-alt mr-3"></i>Dashboard
+                    </a>
+                    <a href="{{ url_for('superadmin.admins') }}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-users-cog mr-3"></i>Manage Admins
+                    </a>
+                    <a href="{{ url_for('superadmin.cameras') }}" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-video mr-3"></i>Camera Manager
+                    </a>
+                    <a href="/superadmin/users" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-users mr-3"></i>Users
+                    </a>
+                    <a href="/superadmin/logs" class="flex items-center px-4 py-3 text-gray-700 hover:bg-gray-50 rounded-lg">
+                        <i class="fas fa-file-alt mr-3"></i>System Logs
+                    </a>
+                </nav>
             </div>
         </div>
 
-        <!-- Live Camera Feed -->
-        <div class="content-section">
-            <div class="camera-card">
-                <div class="camera-header">
-                    <h3>
-                        <span class="live-dot"></span>
-                        <i class="fas fa-camera"></i>
-                        Live Attendance Camera
-                    </h3>
-                    <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
-                        <button id="toggleCamera" class="camera-btn" onclick="toggleCameraFeed()">
-                            <i class="fas fa-play"></i>
-                            <span>Start 3D Camera</span>
+        <!-- Main Content -->
+        <div class="flex-1 lg:ml-0 p-4 lg:p-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+                <div class="stat-card rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Total Admins</p>
+                            <p class="text-3xl font-bold" id="total-admins">{{ stats.total_admins or 0 }}</p>
+                        </div>
+                        <i class="fas fa-users-cog text-4xl text-white/60"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card-2 rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Total Users</p>
+                            <p class="text-3xl font-bold" id="total-users">{{ stats.total_users or 0 }}</p>
+                        </div>
+                        <i class="fas fa-users text-4xl text-white/60"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card-3 rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Active Cameras</p>
+                            <p class="text-3xl font-bold" id="active-cameras">{{ stats.active_cameras or 0 }}</p>
+                        </div>
+                        <i class="fas fa-video text-4xl text-white/60"></i>
+                    </div>
+                </div>
+
+                <div class="stat-card-4 rounded-xl p-6 text-white card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-white/80 text-sm">Pending Requests</p>
+                            <p class="text-3xl font-bold" id="pending-requests">{{ stats.pending_requests or 0 }}</p>
+                        </div>
+                        <i class="fas fa-clock text-4xl text-white/60"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Enhanced Live Attendance Camera -->
+            <div class="bg-white rounded-xl shadow-lg p-3 sm:p-6 mb-8">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4 sm:mb-6 gap-3 sm:gap-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-camera mr-2 text-purple-500 text-lg sm:text-xl"></i>
+                        <span id="liveIndicator" class="pulse w-2 h-2 sm:w-3 sm:h-3 bg-red-500 rounded-full mr-2"></span>
+                        <h3 class="text-lg sm:text-xl font-bold text-gray-800">Live 3D Face Recognition</h3>
+                    </div>
+                    <div class="flex flex-wrap gap-2 w-full sm:w-auto">
+                        <button id="toggleCamera" onclick="toggleCameraFeed()" class="flex-1 sm:flex-initial bg-purple-600 hover:bg-purple-700 active:bg-purple-800 text-white px-3 sm:px-4 py-2 rounded-lg transition-all duration-300 flex items-center justify-center touch-manipulation">
+                            <i class="fas fa-play mr-1 sm:mr-2 text-sm"></i>
+                            <span class="text-sm sm:text-base">Start Camera</span>
                         </button>
-                        <button id="switchCamera" class="camera-btn" onclick="switchCamera()" style="background: var(--sa-info); display: none;">
-                            <i class="fas fa-sync-alt"></i>
-                            <span>Switch Camera</span>
+                        <button id="switchCamera" onclick="switchCamera()" class="flex-1 sm:flex-initial bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white px-3 sm:px-4 py-2 rounded-lg transition-all duration-300 hidden touch-manipulation">
+                            <i class="fas fa-sync-alt mr-1 sm:mr-2 text-sm"></i>
+                            <span class="text-sm sm:text-base">Switch</span>
                         </button>
-                        <button id="capturePhoto" class="camera-btn" onclick="capturePhoto()" style="background: var(--sa-success); display: none;">
-                            <i class="fas fa-camera"></i>
-                            <span>Capture</span>
+                        <button id="capturePhoto" onclick="capturePhoto()" class="flex-1 sm:flex-initial bg-green-600 hover:bg-green-700 active:bg-green-800 text-white px-3 sm:px-4 py-2 rounded-lg transition-all duration-300 hidden touch-manipulation">
+                            <i class="fas fa-camera mr-1 sm:mr-2 text-sm"></i>
+                            <span class="text-sm sm:text-base">Capture</span>
                         </button>
                     </div>
                 </div>
                 
-                <div class="camera-container">
-                    <div id="cameraPlaceholder" class="camera-placeholder">
-                        <i class="fas fa-cube" style="font-size: 4rem; margin-bottom: 1rem; color: var(--sa-primary);"></i>
-                        <p style="font-size: 1.25rem; margin-bottom: 0.5rem; font-weight: 600;">Advanced 3D Face Recognition</p>
-                        <p style="font-size: 0.875rem; opacity: 0.7; margin-bottom: 1rem;">99.99% accuracy with pose-invariant detection</p>
-                        <div style="display: flex; gap: 1rem; font-size: 0.75rem; opacity: 0.6;">
-                            <span><i class="fas fa-eye"></i> 468 Landmarks</span>
-                            <span><i class="fas fa-brain"></i> 3D Analysis</span>
-                            <span><i class="fas fa-shield-alt"></i> Anti-Spoofing</span>
+                <div class="relative bg-gradient-to-br from-gray-900 to-purple-900 rounded-xl overflow-hidden camera-height">
+                    <!-- Camera Placeholder -->
+                    <div id="cameraPlaceholder" class="absolute inset-0 flex flex-col items-center justify-center text-white p-4 sm:p-8">
+                        <div class="text-center">
+                            <i class="fas fa-cube text-4xl sm:text-6xl mb-3 sm:mb-4 text-purple-300 animate-pulse"></i>
+                            <h4 class="text-lg sm:text-xl font-semibold mb-2">Advanced 3D Face Recognition</h4>
+                            <p class="text-xs sm:text-sm mb-3 sm:mb-4 text-purple-200">99.99% accuracy with pose-invariant detection</p>
+                            <div class="flex flex-wrap justify-center gap-3 sm:gap-4 text-xs opacity-75">
+                                <span><i class="fas fa-eye mr-1"></i>468 Landmarks</span>
+                                <span><i class="fas fa-brain mr-1"></i>3D Analysis</span>
+                                <span><i class="fas fa-shield-alt mr-1"></i>Anti-Spoofing</span>
+                            </div>
                         </div>
                     </div>
-                    <div id="videoContainer" style="display: none; position: relative;">
+                    
+                    <!-- Video Container -->
+                    <div id="videoContainer" class="relative w-full h-full hidden">
                         <video id="videoFeed" class="video-stream" autoplay muted playsinline></video>
-                        <canvas id="detectionCanvas" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none;"></canvas>
+                        <canvas id="detectionCanvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
                         
-                        <!-- Accuracy Badge -->
-                        <div class="accuracy-badge">
-                            <div class="pulse-dot"></div>
-                            <span>99.99% Accuracy</span>
+                        <!-- Advanced Features Badge -->
+                        <div class="absolute top-2 sm:top-4 left-2 sm:left-4 bg-gradient-to-r from-purple-500 to-purple-600 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-bold flex items-center shadow-lg">
+                            <span class="pulse w-1.5 h-1.5 sm:w-2 sm:h-2 bg-white rounded-full mr-1 sm:mr-2"></span>
+                            <span id="systemBadge">Multi-Modal AI</span>
                         </div>
                         
                         <!-- Detection Info -->
-                        <div class="video-overlay" id="attendanceOverlay">
-                            <p style="margin: 0; display: flex; align-items: center; gap: 0.5rem;">
-                                <i class="fas fa-cube"></i>
-                                <span>3D Face Analysis Active</span>
-                            </p>
-                            <p id="detectionCount" style="margin: 0; font-size: 0.75rem; opacity: 0.8;">0 faces detected</p>
-                            <p id="recognitionStatus" style="margin: 0; font-size: 0.75rem; color: #10b981;">Ready for recognition</p>
+                        <div class="absolute top-2 sm:top-4 right-2 sm:right-4 bg-black bg-opacity-80 text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg text-xs sm:text-sm backdrop-blur-sm">
+                            <div id="faceCount" class="font-semibold">Scanning...</div>
+                            <div id="recognitionStatus" class="text-green-300 mt-0.5 sm:mt-1 text-xs sm:text-sm">Ready</div>
                         </div>
                         
-                        <!-- Face Detection Notification -->
-                        <div class="face-detection-overlay" id="faceDetectionNotify">
-                            <i class="fas fa-check-circle" style="margin-right: 0.5rem;"></i>
-                            <span id="detectionMessage">Face detected - Processing...</span>
+                        <!-- Attendance Success Alert -->
+                        <div id="attendanceAlert" class="absolute bottom-2 sm:bottom-4 left-2 sm:left-2 right-2 sm:right-2 bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 sm:px-4 py-2 sm:py-3 rounded-lg text-center font-semibold hidden transform transition-all duration-300">
+                            <div id="attendanceMessage" class="text-sm sm:text-base"></div>
+                        </div>
+                        
+                        <!-- Loading Indicator -->
+                        <div id="cameraLoading" class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
+                            <div class="text-white text-center">
+                                <div class="animate-spin rounded-full h-8 w-8 sm:h-12 sm:w-12 border-b-2 border-white mx-auto mb-2 sm:mb-4"></div>
+                                <p class="text-xs sm:text-sm">Processing...</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Camera Stats -->
+                <div class="mt-3 sm:mt-4 grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-4 text-center">
+                    <div class="bg-purple-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-purple-600 font-semibold" id="totalDetections">0</div>
+                        <div class="text-xs text-purple-500">Detections</div>
+                    </div>
+                    <div class="bg-green-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-green-600 font-semibold" id="successfulMatches">0</div>
+                        <div class="text-xs text-green-500">Matches</div>
+                    </div>
+                    <div class="bg-blue-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-blue-600 font-semibold" id="attendanceMarked">0</div>
+                        <div class="text-xs text-blue-500">Attendance</div>
+                    </div>
+                    <div class="bg-yellow-50 p-2 sm:p-3 rounded-lg">
+                        <div class="text-xs sm:text-sm text-yellow-600 font-semibold" id="cameraUptime">00:00</div>
+                        <div class="text-xs text-yellow-500">Uptime</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts and Tables -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- Attendance Chart -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-chart-line mr-2 text-blue-500"></i>Attendance Trends
+                    </h3>
+                    <canvas id="attendanceChart" height="300"></canvas>
+                </div>
+
+                <!-- System Health -->
+                <div class="bg-white rounded-xl shadow-lg p-6">
+                    <h3 class="text-xl font-bold text-gray-800 mb-4">
+                        <i class="fas fa-heartbeat mr-2 text-green-500"></i>System Health
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">Database Status</span>
+                            <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm">
+                                <i class="fas fa-check-circle mr-1"></i>Healthy
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">FAISS Index</span>
+                            <span class="px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm" id="faiss-status">
+                                <i class="fas fa-check-circle mr-1"></i>Active
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <span class="text-gray-600">Camera System</span>
+                            <span class="px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm" id="camera-status">
+                                <i class="fas fa-info-circle mr-1"></i>Monitoring
+                            </span>
                         </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Real-time Monitoring -->
-            <div class="realtime-grid">
-                <!-- Live Attendance -->
-                <div class="realtime-card">
-                    <div class="realtime-header">
-                        <h3><i class="fas fa-clock blue"></i> Live Attendance</h3>
-                        <button class="refresh-btn" onclick="loadLiveAttendance()">
-                            <i class="fas fa-sync-alt"></i>
-                        </button>
-                    </div>
-                    <div class="attendance-list" id="liveAttendance">
-                        <div style="text-align: center; padding: 2rem; color: var(--sa-text-light);">
-                            Loading...
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Daily Chart -->
-                <div class="realtime-card">
-                    <div class="realtime-header">
-                        <h3><i class="fas fa-chart-line blue"></i> Last 7 Days</h3>
-                    </div>
-                    <div class="chart-container">
-                        <canvas id="dailyChart"></canvas>
-                    </div>
+            <!-- Recent Activity -->
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-clock mr-2 text-purple-500"></i>Recent Activity
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="min-w-full table-auto">
+                        <thead>
+                            <tr class="bg-gray-50">
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Time</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recent-activity" class="bg-white divide-y divide-gray-200">
+                            <!-- Activity will be loaded here -->
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
     </div>
 
-    <script>
-        // Sidebar Toggle
-        const menuToggle = document.getElementById('menuToggle');
-        const sidebar = document.getElementById('sidebar');
-        const mainContent = document.getElementById('mainContent');
-        const sidebarOverlay = document.getElementById('sidebarOverlay');
-        let isMobile = window.innerWidth <= 1024;
+    <script type="text/javascript">
+        // Dashboard Version 3.0 - Fixed Syntax
+        console.log('Dashboard v3.0 Loading...');
+        
+        // Global variables - No duplicates
+        var cameraActive = false;
+        var currentStream = null;
+        var availableCameras = [];
+        var currentCameraIndex = 0;
+        var faceDetectionInterval = null;
+        var isProcessing = false;
+        var sessionStats = {
+            totalScans: 0,
+            successfulScans: 0,
+            attendanceCount: 0
+        };
 
-        function toggleSidebar() {
-            sidebar.classList.toggle('active');
-            sidebar.classList.toggle('collapsed');
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', function() {
+            loadStats();
+            loadAttendanceChart();
+            loadRecentActivity();
             
-            if (isMobile) {
-                sidebarOverlay.classList.toggle('show');
-            } else {
-                mainContent.classList.toggle('expanded');
-            }
+            // Check system health and show advanced status
+            checkAdvancedSystemHealth();
             
-            menuToggle.classList.toggle('active');
-        }
-
-        menuToggle.addEventListener('click', toggleSidebar);
-        sidebarOverlay.addEventListener('click', toggleSidebar);
-
-        // Close sidebar when clicking a link on mobile
-        document.querySelectorAll('.nav-link').forEach(link => {
-            link.addEventListener('click', () => {
-                if (isMobile && sidebar.classList.contains('active')) {
-                    toggleSidebar();
-                }
-            });
+            // Auto-refresh every 30 seconds
+            setInterval(() => {
+                loadStats();
+                loadRecentActivity();
+            }, 30000);
         });
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            const wasMobile = isMobile;
-            isMobile = window.innerWidth <= 768;
-            
-            if (wasMobile !== isMobile) {
-                sidebar.classList.remove('active', 'collapsed');
-                mainContent.classList.remove('expanded');
-                sidebarOverlay.classList.remove('show');
-                menuToggle.classList.remove('active');
+        // Check Advanced System Health
+        async function checkAdvancedSystemHealth() {
+            try {
+                const response = await fetch('/api/detection_health');
+                const health = await response.json();
                 
-                if (!isMobile) {
-                    sidebar.style.transform = '';
-                }
-            }
-        });
-
-        // Dashboard Data
-        let dailyChart;
-        let cameraFeedActive = false;
-        let videoFeedInterval = null;
-        let attendanceRefreshInterval = null;
-
-        async function initDashboard() {
-            await loadUserInfo();
-            await loadStats();
-            await loadLiveAttendance();
-            await loadCharts();
-            
-            // Auto-refresh live attendance every 10 seconds
-            attendanceRefreshInterval = setInterval(loadLiveAttendance, 10000);
-        }
-
-        async function loadUserInfo() {
-            try {
-                const response = await fetch('/auth/me');
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('userInfo').innerHTML = `
-                        <div style="font-weight: 600;">${data.user.name || 'Super Admin'}</div>
-                        <small style="color: var(--sa-text-light);">${data.user.email}</small>
-                    `;
-                }
-            } catch (error) {
-                console.error('Error loading user info:', error);
-            }
-        }
-
-        async function loadStats() {
-            try {
-                const response = await fetch('/superadmin/stats');
-                if (response.ok) {
-                    const data = await response.json();
-                    document.getElementById('totalAdmins').textContent = data.total_admins || 0;
-                    document.getElementById('totalUsers').textContent = data.total_users || 0;
-                    document.getElementById('totalPersons').textContent = data.total_persons || 0;
-                    document.getElementById('todayAttendance').textContent = data.today_attendance || 0;
-                }
-            } catch (error) {
-                console.error('Error loading stats:', error);
-            }
-        }
-
-        async function loadLiveAttendance() {
-            try {
-                const response = await fetch('/superadmin/attendance/live?limit=10');
-                const data = await response.json();
+                console.log('🚀 Advanced System Health:', health);
                 
-                if (response.ok && data.attendance && data.attendance.length > 0) {
-                    const html = data.attendance.map(att => {
-                        const date = new Date(att.timestamp);
-                        const timeStr = date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-                        const timeAgo = getTimeAgo(date);
-                        const conf = Math.round(att.confidence * 100);
-                        
-                        return `
-                            <div class="attendance-item">
-                                <div style="display: flex; align-items: center; gap: 1rem;">
-                                    <div class="user-avatar">
-                                        <i class="fas fa-user"></i>
-                                    </div>
-                                    <div>
-                                        <div style="font-weight: 600;">${att.name}</div>
-                                        <div style="font-size: 0.75rem; color: var(--sa-text-light);">${timeAgo}</div>
-                                    </div>
-                                </div>
-                                <div style="text-align: right;">
-                                    <div style="font-size: 0.875rem; margin-bottom: 0.25rem;">${timeStr}</div>
-                                    <span class="badge badge-success">${conf}%</span>
-                                </div>
-                            </div>
-                        `;
-                    }).join('');
-                    
-                    document.getElementById('liveAttendance').innerHTML = html;
-                } else {
-                    document.getElementById('liveAttendance').innerHTML = `
-                        <div style="text-align: center; padding: 2rem; color: var(--sa-text-light);">
-                            <i class="fas fa-inbox" style="font-size: 3rem; opacity: 0.3; margin-bottom: 1rem;"></i>
-                            <p>No attendance records today</p>
-                        </div>
-                    `;
-                }
-            } catch (error) {
-                console.error('Error loading live attendance:', error);
-            }
-        }
-
-        function getTimeAgo(date) {
-            const seconds = Math.floor((new Date() - date) / 1000);
-            
-            if (seconds < 60) return 'Just now';
-            const minutes = Math.floor(seconds / 60);
-            if (minutes < 60) return `${minutes}m ago`;
-            const hours = Math.floor(minutes / 60);
-            if (hours < 24) return `${hours}h ago`;
-            return date.toLocaleDateString();
-        }
-
-        async function loadCharts() {
-            try {
-                const response = await fetch('/superadmin/attendance/stats?days=7');
-                const data = await response.json();
-                
-                if (response.ok && data.daily_attendance) {
-                    createDailyChart(data.daily_attendance);
-                }
-            } catch (error) {
-                console.error('Error loading charts:', error);
-            }
-        }
-
-        function createDailyChart(dailyData) {
-            const ctx = document.getElementById('dailyChart').getContext('2d');
-            
-            if (dailyChart) {
-                dailyChart.destroy();
-            }
-            
-            dailyChart = new Chart(ctx, {
-                type: 'line',
-                data: {
-                    labels: dailyData.map(d => new Date(d.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })),
-                    datasets: [{
-                        label: 'Attendance',
-                        data: dailyData.map(d => d.count),
-                        borderColor: '#9333ea',
-                        backgroundColor: 'rgba(147, 51, 234, 0.1)',
-                        tension: 0.4,
-                        fill: true,
-                        pointRadius: 4,
-                        pointBackgroundColor: '#9333ea',
-                        pointBorderColor: '#fff',
-                        pointBorderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: { 
-                            display: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                precision: 0,
-                                color: '#94a3b8'
-                            },
-                            grid: {
-                                color: 'rgba(148, 163, 184, 0.1)'
-                            }
-                        },
-                        x: {
-                            ticks: {
-                                color: '#94a3b8'
-                            },
-                            grid: {
-                                display: false
-                            }
+                if (health.overall_health) {
+                    // Update system status indicators
+                    const systemBadge = document.getElementById('systemBadge');
+                    if (systemBadge) {
+                        if (health.components.ultra_recognition) {
+                            systemBadge.textContent = 'Ultra AI Ready';
+                            systemBadge.className = systemBadge.className.replace('from-purple-500 to-purple-600', 'from-green-500 to-green-600');
+                        } else if (health.components.deepface && health.components.mediapipe) {
+                            systemBadge.textContent = 'Enhanced AI Ready';
+                            systemBadge.className = systemBadge.className.replace('from-purple-500 to-purple-600', 'from-blue-500 to-blue-600');
                         }
                     }
+                    
+                    showToast(`${health.recommendation} - 99.99% accuracy`, 'success');
+                } else {
+                    showToast('Basic detection available', 'warning');
                 }
-            });
+            } catch (error) {
+                console.error('Health check failed:', error);
+            }
         }
 
-        // Enhanced 3D Camera Functions
-        let currentStream = null;
-        let currentDeviceId = null;
-        let availableCameras = [];
-        let faceDetectionActive = false;
-        let detectionCanvas = null;
-        let detectionContext = null;
+        // Sidebar toggle function
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        }
 
-        async function toggleCameraFeed() {
-            const videoFeed = document.getElementById('videoFeed');
-            const videoContainer = document.getElementById('videoContainer');
-            const placeholder = document.getElementById('cameraPlaceholder');
-            const overlay = document.getElementById('attendanceOverlay');
+        // Toast notification function
+        function showToast(message, type = 'info') {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => toast.classList.add('show'), 100);
+            setTimeout(() => {
+                toast.classList.remove('show');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // Enhanced Camera System with Mobile Support
+        var cameraStats = {
+            totalDetections: 0,
+            successfulMatches: 0,
+            attendanceMarked: 0,
+            startTime: null
+        };
+
+        // Make all functions global immediately
+        window.toggleCameraFeed = async function() {
             const toggleBtn = document.getElementById('toggleCamera');
             const switchBtn = document.getElementById('switchCamera');
             const captureBtn = document.getElementById('capturePhoto');
+            const placeholder = document.getElementById('cameraPlaceholder');
+            const videoContainer = document.getElementById('videoContainer');
+            const loadingIndicator = document.getElementById('cameraLoading');
+            const liveIndicator = document.getElementById('liveIndicator');
             
-            if (!cameraFeedActive) {
+            if (!cameraActive) {
                 try {
-                    // Get available cameras
-                    await getAvailableCameras();
+                    // Show loading
+                    showLoading(true);
+                    showToast('Initializing 3D Face Recognition Camera...', 'info');
                     
-                    // Start camera with 3D face detection
+                    await getAvailableCameras();
                     await startCamera();
                     
-                    videoContainer.style.display = 'block';
-                    placeholder.style.display = 'none';
-                    overlay.style.display = 'block';
-                    switchBtn.style.display = availableCameras.length > 1 ? 'flex' : 'none';
-                    captureBtn.style.display = 'flex';
+                    // Hide loading and show video
+                    showLoading(false);
+                    placeholder.classList.add('hidden');
+                    videoContainer.classList.remove('hidden');
                     
-                    // Initialize face detection canvas
-                    initializeDetectionCanvas();
+                    // Update UI
+                    toggleBtn.innerHTML = '<i class="fas fa-stop mr-1 sm:mr-2 text-sm"></i><span class="text-sm sm:text-base">Stop Camera</span>';
+                    toggleBtn.className = toggleBtn.className.replace('bg-purple-600 hover:bg-purple-700 active:bg-purple-800', 'bg-red-600 hover:bg-red-700 active:bg-red-800');
                     
-                    // Start 3D face detection
+                    if (availableCameras.length > 1) {
+                        switchBtn.classList.remove('hidden');
+                    }
+                    captureBtn.classList.remove('hidden');
+                    
+                    // Change indicator to green (active)
+                    liveIndicator.className = liveIndicator.className.replace('bg-red-500', 'bg-green-500');
+                    
+                    // Start detection and stats
                     startFaceDetection();
-                    
-                    toggleBtn.innerHTML = '<i class="fas fa-stop"></i><span>Stop 3D Camera</span>';
-                    toggleBtn.classList.add('stop');
-                    cameraFeedActive = true;
-                    
-                    // Enhanced attendance refresh
-                    clearInterval(attendanceRefreshInterval);
-                    attendanceRefreshInterval = setInterval(loadLiveAttendance, 3000);
+                    startCameraStats();
+                    cameraActive = true;
                     
                     showToast('3D Face Recognition Camera Started - 99.99% Accuracy Active', 'success');
                 } catch (error) {
-                    console.error('Camera start error:', error);
-                    showToast('Camera access denied or not available', 'error');
+                    console.error('Camera error:', error);
+                    showLoading(false);
+                    showToast('Camera access denied. Please allow camera permissions.', 'error');
                 }
             } else {
-                // Stop camera
-                await stopCamera();
+                stopCamera();
                 
-                videoContainer.style.display = 'none';
-                placeholder.style.display = 'flex';
-                overlay.style.display = 'none';
-                switchBtn.style.display = 'none';
-                captureBtn.style.display = 'none';
+                // Show placeholder
+                placeholder.classList.remove('hidden');
+                videoContainer.classList.add('hidden');
                 
-                toggleBtn.innerHTML = '<i class="fas fa-play"></i><span>Start 3D Camera</span>';
-                toggleBtn.classList.remove('stop');
-                cameraFeedActive = false;
+                // Reset UI
+                toggleBtn.innerHTML = '<i class="fas fa-play mr-1 sm:mr-2 text-sm"></i><span class="text-sm sm:text-base">Start Camera</span>';
+                toggleBtn.className = toggleBtn.className.replace('bg-red-600 hover:bg-red-700 active:bg-red-800', 'bg-purple-600 hover:bg-purple-700 active:bg-purple-800');
                 
-                // Reset to normal refresh interval
-                clearInterval(attendanceRefreshInterval);
-                attendanceRefreshInterval = setInterval(loadLiveAttendance, 10000);
+                switchBtn.classList.add('hidden');
+                captureBtn.classList.add('hidden');
                 
-                showToast('Camera feed stopped', 'info');
+                // Change indicator back to red (inactive)
+                liveIndicator.className = liveIndicator.className.replace('bg-green-500', 'bg-red-500');
+                
+                cameraActive = false;
+                showToast('Camera stopped', 'info');
+            }
+        };
+
+        window.showLoading = function(show) {
+            const loadingIndicator = document.getElementById('cameraLoading');
+            if (show) {
+                loadingIndicator.classList.remove('hidden');
+            } else {
+                loadingIndicator.classList.add('hidden');
             }
         }
 
@@ -1172,136 +618,324 @@
                 const devices = await navigator.mediaDevices.enumerateDevices();
                 availableCameras = devices.filter(device => device.kind === 'videoinput');
                 console.log('Available cameras:', availableCameras.length);
+                
+                // Request permissions first
+                if (availableCameras.length === 0) {
+                    await navigator.mediaDevices.getUserMedia({ video: true });
+                    const newDevices = await navigator.mediaDevices.enumerateDevices();
+                    availableCameras = newDevices.filter(device => device.kind === 'videoinput');
+                }
             } catch (error) {
                 console.error('Error getting cameras:', error);
+                throw new Error('Camera access denied or no cameras available');
             }
         }
 
-        async function startCamera(deviceId = null) {
+        async function startCamera() {
             try {
+                // Mobile-optimized constraints
+                const isMobile = window.innerWidth <= 768;
                 const constraints = {
                     video: {
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 },
-                        frameRate: { ideal: 30 },
-                        facingMode: deviceId ? undefined : 'user',
-                        deviceId: deviceId ? { exact: deviceId } : undefined
+                        width: { ideal: isMobile ? 720 : 1280 },
+                        height: { ideal: isMobile ? 480 : 720 },
+                        frameRate: { ideal: isMobile ? 24 : 30 },
+                        facingMode: isMobile ? 'user' : undefined, // Front camera on mobile
+                        deviceId: availableCameras.length > 0 && !isMobile ? 
+                            { exact: availableCameras[currentCameraIndex].deviceId } : undefined
                     }
                 };
+
+                // Stop existing stream
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
 
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 const videoFeed = document.getElementById('videoFeed');
                 videoFeed.srcObject = currentStream;
-                currentDeviceId = deviceId;
                 
-                return true;
+                // Wait for video to be ready
+                return new Promise((resolve) => {
+                    videoFeed.onloadedmetadata = () => {
+                        videoFeed.play();
+                        setTimeout(resolve, 500); // Give extra time for camera to stabilize
+                    };
+                });
             } catch (error) {
                 console.error('Error starting camera:', error);
-                throw error;
+                throw new Error('Failed to start camera. Please check permissions.');
             }
         }
 
-        async function stopCamera() {
+        function stopCamera() {
             if (currentStream) {
                 currentStream.getTracks().forEach(track => track.stop());
                 currentStream = null;
             }
-            faceDetectionActive = false;
-            currentDeviceId = null;
+            if (faceDetectionInterval) {
+                clearInterval(faceDetectionInterval);
+                faceDetectionInterval = null;
+            }
+            if (cameraStats.uptimeInterval) {
+                clearInterval(cameraStats.uptimeInterval);
+                cameraStats.uptimeInterval = null;
+            }
         }
 
-        async function switchCamera() {
-            if (availableCameras.length <= 1) return;
+        window.switchCamera = async function() {
+            if (availableCameras.length <= 1) {
+                showToast('No additional cameras available', 'info');
+                return;
+            }
             
-            const currentIndex = availableCameras.findIndex(cam => cam.deviceId === currentDeviceId);
-            const nextIndex = (currentIndex + 1) % availableCameras.length;
-            const nextCamera = availableCameras[nextIndex];
+            showToast('Switching camera...', 'info');
+            currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
             
-            await stopCamera();
-            await startCamera(nextCamera.deviceId);
+            showLoading(true);
+            await startCamera();
+            showLoading(false);
             
-            showToast(`Switched to ${nextCamera.label || 'Camera ' + (nextIndex + 1)}`, 'info');
-        }
+            if (cameraActive) {
+                startFaceDetection();
+            }
+            
+            showToast(`Switched to camera ${currentCameraIndex + 1} of ${availableCameras.length}`, 'success');
+        };
 
-        function initializeDetectionCanvas() {
-            detectionCanvas = document.getElementById('detectionCanvas');
-            detectionContext = detectionCanvas.getContext('2d');
+        window.startFaceDetection = function() {
+            let detectionCounter = 0;
+            let isProcessing = false;
             
-            // Match canvas size to video
+            faceDetectionInterval = setInterval(async () => {
+                if (isProcessing) return;
+                
+                detectionCounter++;
+                
+                try {
+                    // Capture frame from video
+                    const video = document.getElementById('videoFeed');
+                    if (!video || video.videoWidth === 0) return;
+                    
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    ctx.drawImage(video, 0, 0);
+                    
+                    // Convert to blob
+                    canvas.toBlob(async (blob) => {
+                        if (isProcessing) return;
+                        isProcessing = true;
+                        
+                        try {
+                            // Send frame to backend for face detection
+                            const formData = new FormData();
+                            formData.append('frame', blob, 'frame.jpg');
+                            
+                            // Try advanced multi-modal detection first
+                            let response = await fetch('/api/detect_face_ultra', {
+                                method: 'POST',
+                                body: formData
+                            });
+                            
+                            // Fallback to enhanced detection if ultra fails
+                            if (!response.ok) {
+                                console.log('🔄 Ultra detection failed, trying enhanced...');
+                                response = await fetch('/api/detect_face_public', {
+                                    method: 'POST',
+                                    body: formData
+                                });
+                            }
+                            
+                            const result = await response.json();
+                            
+                            if (result.status === 'success') {
+                                const faceCount = result.faces_detected;
+                                document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
+                                
+                                // Update system badge with advanced processing info
+                                if (result.advanced_processing) {
+                                    const models = result.advanced_processing.models_used || [];
+                                    const badge = document.getElementById('systemBadge');
+                                    if (badge) {
+                                        badge.textContent = models.length > 1 ? `${models.length} Models Active` : 'Multi-Modal AI';
+                                    }
+                                }
+                                
+                                if (faceCount > 0 && result.faces && result.faces.length > 0) {
+                                    cameraStats.totalDetections++;
+                                    updateCameraStats();
+                                    
+                                    // Process first detected face
+                                    const face = result.faces[0];
+                                    
+                                    if (face.recognized) {
+                                        const confidence = (face.match_confidence * 100).toFixed(1);
+                                        
+                                        document.getElementById('recognitionStatus').textContent = `✓ ${face.name} (${confidence}%)`;
+                                        document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                        
+                                        if (face.attendance_marked) {
+                                            showFaceDetectionAlert(`✓ ${face.name} - Attendance Marked!`, 'success');
+                                            showToast(`Attendance marked for ${face.name} (${confidence}% confidence)`, 'success');
+                                            
+                                            cameraStats.successfulMatches++;
+                                            cameraStats.attendanceMarked++;
+                                            updateCameraStats();
+                                            
+                                            // Add detection effect to video
+                                            video.classList.add('detection-active');
+                                            setTimeout(() => video.classList.remove('detection-active'), 2000);
+                                            
+                                            // Refresh live attendance data
+                                            setTimeout(loadLiveAttendance, 1000);
+                                        } else if (face.already_marked) {
+                                            showFaceDetectionAlert(`${face.name} - Already marked today`, 'info');
+                                            showToast(`${face.name} attendance already marked today`, 'info');
+                                        }
+                                    } else {
+                                        document.getElementById('recognitionStatus').textContent = 'Face not recognized';
+                                        document.getElementById('recognitionStatus').className = 'text-red-300 mt-1';
+                                        showFaceDetectionAlert('Face not recognized - Please face the camera', 'error');
+                                    }
+                                    
+                                    // Draw face bounding boxes on canvas overlay
+                                    drawFaceBoundingBoxes(result.faces);
+                                } else {
+                                    document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
+                                    document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                    hideFaceDetectionAlert();
+                                    clearFaceBoundingBoxes();
+                                }
+                            } else {
+                                // API error, fall back to ready state
+                                document.getElementById('faceCount').textContent = '0 faces detected';
+                                document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
+                                document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                console.warn('Face detection API error:', result.message);
+                            }
+                        } catch (error) {
+                            console.error('🚨 Face detection request error:', error);
+                            
+                            // Handle different types of errors
+                            if (error.message.includes('502')) {
+                                document.getElementById('recognitionStatus').textContent = 'Server temporarily unavailable';
+                                document.getElementById('recognitionStatus').className = 'text-yellow-400 mt-0.5 sm:mt-1 text-xs sm:text-sm';
+                            } else if (error.message.includes('500')) {
+                                document.getElementById('recognitionStatus').textContent = 'Server error - check system';
+                                document.getElementById('recognitionStatus').className = 'text-red-400 mt-0.5 sm:mt-1 text-xs sm:text-sm';
+                            } else {
+                                // Network or other issues - don't show persistent error to user
+                                console.warn('Network issue, continuing...');
+                            }
+                        } finally {
+                            isProcessing = false;
+                        }
+                    }, 'image/jpeg', 0.8);
+                    
+                } catch (error) {
+                    console.error('Face detection error:', error);
+                    isProcessing = false;
+                }
+            }, 1500); // Check every 1.5 seconds for real API calls
+        };
+
+        // Function to draw face bounding boxes on overlay canvas
+        function drawFaceBoundingBoxes(faces) {
+            const canvas = document.getElementById('detectionCanvas');
             const video = document.getElementById('videoFeed');
-            video.addEventListener('loadedmetadata', () => {
-                detectionCanvas.width = video.videoWidth;
-                detectionCanvas.height = video.videoHeight;
+            
+            if (!canvas || !video) return;
+            
+            // Resize canvas to match video
+            canvas.width = video.offsetWidth;
+            canvas.height = video.offsetHeight;
+            
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate scale factors
+            const scaleX = canvas.width / video.videoWidth;
+            const scaleY = canvas.height / video.videoHeight;
+            
+            faces.forEach(face => {
+                if (face.bbox) {
+                    const x = face.bbox.x * scaleX;
+                    const y = face.bbox.y * scaleY;
+                    const width = face.bbox.width * scaleX;
+                    const height = face.bbox.height * scaleY;
+                    
+                    // Draw bounding box
+                    ctx.strokeStyle = face.recognized ? '#10b981' : '#ef4444'; // green if recognized, red if not
+                    ctx.lineWidth = 3;
+                    ctx.strokeRect(x, y, width, height);
+                    
+                    // Draw name label if recognized
+                    if (face.recognized && face.name) {
+                        ctx.fillStyle = face.recognized ? '#10b981' : '#ef4444';
+                        ctx.fillRect(x, y - 30, width, 25);
+                        
+                        ctx.fillStyle = 'white';
+                        ctx.font = '14px Arial';
+                        ctx.fillText(`${face.name} (${(face.match_confidence * 100).toFixed(1)}%)`, x + 5, y - 10);
+                    }
+                }
             });
         }
 
-        function startFaceDetection() {
-            faceDetectionActive = true;
-            detectFaces();
-        }
-
-        async function detectFaces() {
-            if (!faceDetectionActive) return;
-            
-            const video = document.getElementById('videoFeed');
-            const canvas = detectionCanvas;
-            const ctx = detectionContext;
-            
-            if (video.readyState === video.HAVE_ENOUGH_DATA) {
-                // Clear previous detections
+        function clearFaceBoundingBoxes() {
+            const canvas = document.getElementById('detectionCanvas');
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
                 ctx.clearRect(0, 0, canvas.width, canvas.height);
-                
-                // Simulate face detection (in real implementation, use MediaPipe or similar)
-                const faceCount = Math.floor(Math.random() * 3); // 0-2 faces
-                
-                // Update detection count
-                document.getElementById('detectionCount').textContent = `${faceCount} faces detected`;
-                
-                if (faceCount > 0) {
-                    // Show detection notification
-                    showFaceDetection(`${faceCount} face(s) detected - Analyzing...`);
-                    
-                    // Update recognition status
-                    document.getElementById('recognitionStatus').textContent = '3D analysis in progress...';
-                    
-                    // Simulate face recognition process
-                    setTimeout(() => {
-                        if (Math.random() > 0.3) { // 70% chance of recognition
-                            const names = ['John Doe', 'Jane Smith', 'Mike Johnson', 'Sarah Wilson'];
-                            const recognizedName = names[Math.floor(Math.random() * names.length)];
-                            showFaceDetection(`✓ ${recognizedName} - Attendance Marked`);
-                            document.getElementById('recognitionStatus').textContent = 'Recognition successful';
-                            
-                            // Refresh attendance list
-                            setTimeout(loadLiveAttendance, 1000);
-                        } else {
-                            showFaceDetection('Face not recognized - Please try again');
-                            document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
-                        }
-                    }, 2000);
-                } else {
-                    document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
-                }
             }
-            
-            // Continue detection loop
-            setTimeout(detectFaces, 500); // Check every 500ms
         }
 
-        function showFaceDetection(message) {
-            const notification = document.getElementById('faceDetectionNotify');
-            const messageEl = document.getElementById('detectionMessage');
+        function showFaceDetectionAlert(message, type) {
+            const alert = document.getElementById('faceDetectionAlert');
+            const messageSpan = document.getElementById('detectionMessage');
             
-            messageEl.textContent = message;
-            notification.style.display = 'block';
+            messageSpan.textContent = message;
+            alert.classList.remove('hidden');
             
-            // Auto-hide after 3 seconds
-            setTimeout(() => {
-                notification.style.display = 'none';
-            }, 3000);
+            // Change color based on type
+            if (type === 'success') {
+                alert.className = alert.className.replace(/from-\w+-500 to-\w+-600/, 'from-green-500 to-emerald-600');
+            } else if (type === 'error') {
+                alert.className = alert.className.replace(/from-\w+-500 to-\w+-600/, 'from-red-500 to-pink-600');
+            } else {
+                alert.className = alert.className.replace(/from-\w+-500 to-\w+-600/, 'from-blue-500 to-purple-600');
+            }
         }
 
-        async function capturePhoto() {
+        function hideFaceDetectionAlert() {
+            const alert = document.getElementById('faceDetectionAlert');
+            alert.classList.add('hidden');
+        }
+
+        function startCameraStats() {
+            cameraStats.startTime = Date.now();
+            cameraStats.totalDetections = 0;
+            cameraStats.successfulMatches = 0;
+            cameraStats.attendanceMarked = 0;
+            
+            // Update uptime every second
+            cameraStats.uptimeInterval = setInterval(() => {
+                const uptime = Date.now() - cameraStats.startTime;
+                const minutes = Math.floor(uptime / 60000);
+                const seconds = Math.floor((uptime % 60000) / 1000);
+                document.getElementById('cameraUptime').textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function updateCameraStats() {
+            document.getElementById('totalDetections').textContent = cameraStats.totalDetections;
+            document.getElementById('successfulMatches').textContent = cameraStats.successfulMatches;
+            document.getElementById('attendanceMarked').textContent = cameraStats.attendanceMarked;
+        }
+
+        window.capturePhoto = async function() {
             const video = document.getElementById('videoFeed');
             const canvas = document.createElement('canvas');
             const ctx = canvas.getContext('2d');
@@ -1310,172 +944,257 @@
             canvas.height = video.videoHeight;
             ctx.drawImage(video, 0, 0);
             
-            // Convert to blob and send for 3D analysis
             canvas.toBlob(async (blob) => {
-                const formData = new FormData();
-                formData.append('file', blob, 'capture.jpg');
-                
                 try {
-                    showToast('Analyzing captured image with 3D face recognition...', 'info');
+                    showToast('Capturing and analyzing photo...', 'info');
                     
-                    const response = await fetch('/api/analyze_3d_face', {
+                    // First try face detection API
+                    const formData = new FormData();
+                    formData.append('frame', blob, 'capture.jpg');
+                    
+                    const detectResponse = await fetch('/api/detect_face', {
                         method: 'POST',
                         body: formData
                     });
                     
-                    const result = await response.json();
+                    const detectResult = await detectResponse.json();
                     
-                    if (result.status === 'success') {
-                        showToast(`3D Analysis Complete - Quality: ${(result.quality_score * 100).toFixed(1)}%`, 'success');
-                        console.log('3D Analysis Result:', result);
+                    if (detectResult.status === 'success' && detectResult.faces_detected > 0) {
+                        const face = detectResult.faces[0];
+                        
+                        if (face.recognized) {
+                            const confidence = (face.match_confidence * 100).toFixed(1);
+                            showToast(`✓ Person Identified: ${face.name} (${confidence}% confidence)`, 'success');
+                            
+                            if (face.attendance_marked) {
+                                showToast(`Attendance marked for ${face.name}!`, 'success');
+                                cameraStats.attendanceMarked++;
+                                updateCameraStats();
+                                loadLiveAttendance();
+                            } else if (face.already_marked) {
+                                showToast(`${face.name} attendance already marked today`, 'info');
+                            }
+                        } else {
+                            showToast('Face detected but not recognized in database', 'error');
+                        }
                     } else {
-                        showToast('3D analysis failed: ' + result.msg, 'error');
+                        showToast('No faces detected in captured photo', 'error');
                     }
+                    
+                    // Also run 3D analysis for additional info
+                    const analysisFormData = new FormData();
+                    analysisFormData.append('file', blob, 'capture.jpg');
+                    
+                    const analysisResponse = await fetch('/api/analyze_3d_face', {
+                        method: 'POST',
+                        body: analysisFormData
+                    });
+                    
+                    const analysisResult = await analysisResponse.json();
+                    
+                    if (analysisResult.status === 'success') {
+                        showToast(`3D Analysis - Quality: ${(analysisResult.quality_score * 100).toFixed(1)}% | Landmarks: ${analysisResult.landmarks_count}`, 'info');
+                    }
+                    
                 } catch (error) {
-                    showToast('Error during 3D analysis: ' + error.message, 'error');
+                    console.error('Capture photo error:', error);
+                    showToast('Error during photo analysis: ' + error.message, 'error');
                 }
             }, 'image/jpeg', 0.9);
-        }
+        };
 
-        // Toast notification system
-        function showToast(message, type = 'info') {
-            const toast = document.createElement('div');
-            toast.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 1rem 1.5rem;
-                border-radius: 12px;
-                color: white;
-                font-weight: 600;
-                z-index: 10000;
-                max-width: 400px;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-                backdrop-filter: blur(10px);
-                animation: slideInRight 0.3s ease;
-            `;
-            
-            const colors = {
-                success: 'background: linear-gradient(135deg, #10b981, #059669);',
-                error: 'background: linear-gradient(135deg, #ef4444, #dc2626);',
-                info: 'background: linear-gradient(135deg, #3b82f6, #2563eb);',
-                warning: 'background: linear-gradient(135deg, #f59e0b, #d97706);'
-            };
-            
-            toast.style.cssText += colors[type] || colors.info;
-            toast.textContent = message;
-            
-            document.body.appendChild(toast);
-            
-            setTimeout(() => {
-                toast.style.animation = 'slideOutRight 0.3s ease';
-                setTimeout(() => toast.remove(), 300);
-            }, 4000);
-        }
-
-        // Add CSS animations for toast
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideInRight {
-                from { opacity: 0; transform: translateX(100%); }
-                to { opacity: 1; transform: translateX(0); }
-            }
-            @keyframes slideOutRight {
-                from { opacity: 1; transform: translateX(0); }
-                to { opacity: 0; transform: translateX(100%); }
-            }
-        `;
-        document.head.appendChild(style);
-
-        // Handle video feed errors
-        document.addEventListener('DOMContentLoaded', () => {
-            const videoFeed = document.getElementById('videoFeed');
-            if (videoFeed) {
-                videoFeed.onerror = function() {
-                    if (cameraFeedActive) {
-                        console.log('Video feed error, retrying...');
-                        setTimeout(() => {
-                            if (cameraFeedActive) {
-                                videoFeed.src = '/video_feed?' + new Date().getTime();
-                            }
-                        }, 1000);
+        window.loadStats = async function() {
+            try {
+                const response = await fetch('/superadmin/api/stats');
+                const data = await response.json();
+                
+                if (response.ok) {
+                    document.getElementById('total-admins').textContent = data.total_admins || 0;
+                    document.getElementById('total-users').textContent = data.total_users || 0;
+                    document.getElementById('active-cameras').textContent = data.active_cameras || 0;
+                    document.getElementById('pending-requests').textContent = data.pending_enrollments || 0;
+                    
+                    // Update system health
+                    const faissSizeElement = document.getElementById('faiss-status');
+                    if (data.faiss_index_size > 0) {
+                        faissSizeElement.innerHTML = '<i class="fas fa-check-circle mr-1"></i>Active (' + data.faiss_index_size + ')';
+                        faissSizeElement.className = 'px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm';
+                    } else {
+                        faissSizeElement.innerHTML = '<i class="fas fa-exclamation-triangle mr-1"></i>Empty';
+                        faissSizeElement.className = 'px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm';
                     }
-                };
+                }
+            } catch (error) {
+                console.error('Error loading stats:', error);
+                showToast('Failed to load statistics', 'error');
             }
-            
-            // Initialize dashboard
-            initDashboard();
-        });
+        };
 
-        // Toast Notification
-        function showToast(message, type = 'info') {
+        window.loadAttendanceChart = async function() {
+            try {
+                const response = await fetch('/api/superadmin/attendance/stats?days=7');
+                const data = await response.json();
+                
+                if (response.ok && data.daily_attendance) {
+                    const ctx = document.getElementById('attendanceChart').getContext('2d');
+                    new Chart(ctx, {
+                        type: 'line',
+                        data: {
+                            labels: data.daily_attendance.map(d => new Date(d.date).toLocaleDateString()),
+                            datasets: [{
+                                label: 'Daily Attendance',
+                                data: data.daily_attendance.map(d => d.count),
+                                borderColor: 'rgb(59, 130, 246)',
+                                backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                                tension: 0.4,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            scales: {
+                                y: {
+                                    beginAtZero: true
+                                }
+                            }
+                        }
+                    });
+                }
+            } catch (error) {
+                console.error('Error loading attendance chart:', error);
+            }
+        }
+
+        async function loadRecentActivity() {
+            try {
+                const response = await fetch('/api/superadmin/logs?limit=10');
+                const data = await response.json();
+                
+                if (response.ok && data.logs) {
+                    const tbody = document.getElementById('recent-activity');
+                    tbody.innerHTML = data.logs.map(log => `
+                        <tr>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${new Date(log.timestamp).toLocaleString()}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${log.action || 'Unknown'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                                ${log.user || log.performed_by || 'System'}
+                            </td>
+                            <td class="px-6 py-4 whitespace-nowrap">
+                                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                                    log.status === 'success' ? 'bg-green-100 text-green-800' : 
+                                    log.status === 'error' ? 'bg-red-100 text-red-800' : 
+                                    'bg-blue-100 text-blue-800'
+                                }">
+                                    ${log.status || 'info'}
+                                </span>
+                            </td>
+                        </tr>
+                    `).join('');
+                } else {
+                    const tbody = document.getElementById('recent-activity');
+                    tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-gray-500">No recent activity</td></tr>';
+                }
+            } catch (error) {
+                console.error('Error loading recent activity:', error);
+                const tbody = document.getElementById('recent-activity');
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-red-500">Failed to load activity</td></tr>';
+            }
+        }
+
+        // Add missing loadLiveAttendance function
+        window.loadLiveAttendance = async function() {
+            try {
+                const response = await fetch('/superadmin/attendance/live?limit=10');
+                const data = await response.json();
+                
+                if (response.ok && data.attendance && data.attendance.length > 0) {
+                    console.log('Live attendance loaded:', data.attendance.length, 'records');
+                    showToast(`Loaded ${data.attendance.length} recent attendance records`, 'success');
+                } else {
+                    console.log('No live attendance data available');
+                    showToast('No recent attendance records found', 'info');
+                }
+            } catch (error) {
+                console.error('Error loading live attendance:', error);
+                showToast('Failed to load live attendance data', 'error');
+            }
+        };
+
+        window.toggleSidebar = function() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            sidebar.classList.toggle('active');
+            overlay.classList.toggle('active');
+        };
+
+        window.showToast = function(message, type) {
             const toast = document.createElement('div');
-            toast.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: ${type === 'success' ? '#10b981' : type === 'error' ? '#ef4444' : '#3b82f6'};
-                color: white;
-                padding: 1rem 1.5rem;
-                border-radius: 12px;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
-                z-index: 10000;
-                animation: slideInRight 0.3s ease;
-            `;
+            toast.className = `toast ${type || 'info'}`;
             toast.textContent = message;
             document.body.appendChild(toast);
             
+            setTimeout(() => toast.classList.add('show'), 100);
             setTimeout(() => {
-                toast.style.animation = 'slideOutRight 0.3s ease';
+                toast.classList.remove('show');
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
-        }
+        };
 
-        // Logout
-        async function logout() {
-            try {
-                await fetch('/api/auth/logout', { method: 'POST' });
-                window.location.href = '/logout';
-            } catch (error) {
-                window.location.href = '/logout';
-            }
-        }
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (attendanceRefreshInterval) {
-                clearInterval(attendanceRefreshInterval);
-            }
-            if (videoFeedInterval) {
-                clearInterval(videoFeedInterval);
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(event) {
+            const sidebar = document.getElementById('sidebar');
+            const menuToggle = document.getElementById('menuToggle');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            if (window.innerWidth < 1024 && 
+                !sidebar.contains(event.target) && 
+                !menuToggle.contains(event.target) && 
+                sidebar.classList.contains('active')) {
+                toggleSidebar();
             }
         });
 
-        // Add animation styles
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes slideInRight {
-                from {
-                    opacity: 0;
-                    transform: translateX(100px);
-                }
-                to {
-                    opacity: 1;
-                    transform: translateX(0);
-                }
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            if (window.innerWidth >= 1024) {
+                sidebar.classList.remove('active');
+                overlay.classList.remove('active');
             }
-            @keyframes slideOutRight {
-                from {
-                    opacity: 1;
-                    transform: translateX(0);
-                }
-                to {
-                    opacity: 0;
-                    transform: translateX(100px);
-                }
-            }
-        `;
-        document.head.appendChild(style);
+        });
+
+        // Function availability check - Debug helper
+        window.addEventListener('load', function() {
+            console.log('Dashboard v2.0 Loaded Successfully!');
+            console.log('Functions available:', {
+                toggleSidebar: typeof toggleSidebar,
+                toggleCameraFeed: typeof toggleCameraFeed,
+                switchCamera: typeof switchCamera,
+                capturePhoto: typeof capturePhoto,
+                loadLiveAttendance: typeof loadLiveAttendance,
+                showToast: typeof showToast
+            });
+            
+            // Test toast notification
+            setTimeout(() => {
+                showToast('Dashboard loaded successfully!', 'success');
+            }, 1000);
+        });
+
+        // Make functions globally available (fallback)
+        window.toggleSidebar = toggleSidebar;
+        window.toggleCameraFeed = toggleCameraFeed;
+        window.switchCamera = switchCamera;
+        window.capturePhoto = capturePhoto;
+        window.loadLiveAttendance = loadLiveAttendance;
+        window.showToast = showToast;
     </script>
 </body>
 </html>
