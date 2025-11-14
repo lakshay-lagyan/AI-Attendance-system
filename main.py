@@ -813,60 +813,60 @@ def superadmin_users():
     except Exception as e:
         return f"Error loading users: {str(e)}", 500
 
-@app.route("/api/superadmin/attendance/stats")
-@login_required
-def attendance_stats():
-    """Get attendance statistics for charts"""
-    try:
-        days = int(request.args.get('days', 7))
+# @app.route("/api/superadmin/attendance/stats")
+# @login_required
+# def attendance_stats():
+#     """Get attendance statistics for charts"""
+#     try:
+#         days = int(request.args.get('days', 7))
         
-        # Calculate date range
-        end_date = datetime.datetime.utcnow()
-        start_date = end_date - datetime.timedelta(days=days)
+#         # Calculate date range
+#         end_date = datetime.datetime.utcnow()
+#         start_date = end_date - datetime.timedelta(days=days)
         
-        # Get daily attendance data
-        pipeline = [
-            {
-                "$match": {
-                    "timestamp": {
-                        "$gte": start_date,
-                        "$lte": end_date
-                    }
-                }
-            },
-            {
-                "$group": {
-                    "_id": {
-                        "$dateToString": {
-                            "format": "%Y-%m-%d",
-                            "date": "$timestamp"
-                        }
-                    },
-                    "count": {"$sum": 1}
-                }
-            },
-            {
-                "$sort": {"_id": 1}
-            }
-        ]
+#         # Get daily attendance data
+#         pipeline = [
+#             {
+#                 "$match": {
+#                     "timestamp": {
+#                         "$gte": start_date,
+#                         "$lte": end_date
+#                     }
+#                 }
+#             },
+#             {
+#                 "$group": {
+#                     "_id": {
+#                         "$dateToString": {
+#                             "format": "%Y-%m-%d",
+#                             "date": "$timestamp"
+#                         }
+#                     },
+#                     "count": {"$sum": 1}
+#                 }
+#             },
+#             {
+#                 "$sort": {"_id": 1}
+#             }
+#         ]
         
-        daily_attendance = list(attendance_col.aggregate(pipeline))
+#         daily_attendance = list(attendance_col.aggregate(pipeline))
         
-        # Format response
-        response_data = {
-            "daily_attendance": [
-                {
-                    "date": item["_id"],
-                    "count": item["count"]
-                }
-                for item in daily_attendance
-            ]
-        }
+#         # Format response
+#         response_data = {
+#             "daily_attendance": [
+#                 {
+#                     "date": item["_id"],
+#                     "count": item["count"]
+#                 }
+#                 for item in daily_attendance
+#             ]
+#         }
         
-        return jsonify(response_data)
+#         return jsonify(response_data)
         
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
+#     except Exception as e:
+#         return jsonify({"error": str(e)}), 500
 
 @app.route("/api/superadmin/logs")
 @login_required 
