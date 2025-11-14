@@ -161,8 +161,12 @@ def save_faiss_index():
     except Exception as e:
         print(f"Error saving FAISS index: {e}")
 
-# Initialize FAISS on startup
-initialize_faiss_index()
+# Initialize FAISS lazily to avoid startup delays
+def lazy_faiss_init():
+    global faiss_index
+    if faiss_index is None:
+        initialize_faiss_index()
+    return faiss_index
 
 # Login manager
 login_manager = LoginManager()
@@ -542,6 +546,130 @@ def pending_requests_count():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/api/enroll_user", methods=["POST"])
+@admin_required
+def enroll_user():
+    """Enroll a new user with advanced face scanning"""
+    try:
+        data = request.get_json()
+        
+        name = data.get("name", "").strip()
+        email = data.get("email", "").strip()
+        department = data.get("department", "").strip()
+        photos = data.get("photos", [])  # Base64 encoded photos
+        
+        if not name:
+            return jsonify({"status": "failed", "message": "Name is required"}), 400
+        
+        if not photos or len(photos) < 3:
+            return jsonify({"status": "failed", "message": "At least 3 photos are required for enrollment"}), 400
+        
+        # Check if person already exists
+        existing_person = persons_col.find_one({"name": name})
+        if existing_person:
+            return jsonify({"status": "failed", "message": "Person with this name already exists"}), 400
+        
+        # Process multiple photos for better recognition
+        embeddings = []
+        valid_photos = 0
+        
+        for i, photo_data in enumerate(photos):
+            try:
+                # Decode base64 image
+                if photo_data.startswith('data:image'):
+                    photo_data = photo_data.split(',')[1]
+                
+                img_bytes = base64.b64decode(photo_data)
+                img_array = np.frombuffer(img_bytes, np.uint8)
+                image = cv.imdecode(img_array, cv.IMREAD_COLOR)
+                
+                if image is None:
+                    continue
+                
+                # Get face embedding
+                embedding = get_face_embedding(image)
+                if embedding is not None:
+                    embeddings.append(embedding)
+                    valid_photos += 1
+                    print(f"✅ Processed photo {i + 1} for {name}")
+                
+            except Exception as e:
+                print(f"❌ Error processing photo {i + 1}: {e}")
+                continue
+        
+        if valid_photos < 2:
+            return jsonify({"status": "failed", "message": f"Only {valid_photos} valid photos found. Need at least 2 clear face photos"}), 400
+        
+        # Create multi-vector template for better recognition
+        try:
+            if len(embeddings) >= 3:
+                # Create advanced template with multiple embeddings
+                stored_template = extract_multi_vector_embeddings(embeddings)
+            else:
+                # Use ensemble matching for fewer photos
+                centroid = np.mean(embeddings, axis=0)
+                stored_template = {
+                    'centroid': centroid,
+                    'individual_embeddings': embeddings,
+                    'template_type': 'multi_vector',
+                    'photo_count': len(embeddings)
+                }
+            
+            # Create person document
+            person_id = f"{datetime.datetime.utcnow().timestamp()}_{name.replace(' ', '_')}"
+            person_doc = {
+                "_id": person_id,
+                "name": name,
+                "email": email if email else None,
+                "department": department if department else None,
+                "embedding": pickle.dumps(stored_template),
+                "enrollment_date": datetime.datetime.utcnow(),
+                "photos_count": len(embeddings),
+                "status": "active",
+                "enrolled_by": current_user.email,
+                "template_type": "advanced_multi_vector"
+            }
+            
+            # Insert into database
+            persons_col.insert_one(person_doc)
+            
+            # Initialize FAISS if needed and add to index
+            if faiss_index is None:
+                lazy_faiss_init()
+            
+            # Add to FAISS index
+            centroid_embedding = stored_template.get('centroid', embeddings[0])
+            faiss_index.add(np.array([centroid_embedding], dtype=np.float32))
+            person_id_map.append(name)
+            
+            # Save FAISS index
+            save_faiss_index()
+            
+            # Log enrollment
+            system_logs_col.insert_one({
+                "action": "user_enrollment",
+                "person_name": name,
+                "person_id": person_id,
+                "photos_processed": len(embeddings),
+                "enrolled_by": current_user.email,
+                "timestamp": datetime.datetime.utcnow()
+            })
+            
+            return jsonify({
+                "status": "success",
+                "message": f"User '{name}' enrolled successfully with {len(embeddings)} photos",
+                "person_id": person_id,
+                "photos_processed": len(embeddings)
+            }), 201
+            
+        except Exception as e:
+            print(f"❌ Template creation error: {e}")
+            return jsonify({"status": "failed", "message": f"Error creating face template: {str(e)}"}), 500
+        
+    except Exception as e:
+        print(f"❌ Enrollment error: {e}")
+        return jsonify({"status": "failed", "message": f"Enrollment failed: {str(e)}"}), 500
+
 # --- User Routes ---
 @app.route("/user/dashboard")
 @login_required
@@ -683,8 +811,81 @@ def superadmin_users():
                     pass
         return render_template("superadmin/users.html", superadmin=current_user, users=users)
     except Exception as e:
-        print(f"Error in superadmin_users: {e}")
-        return render_template("superadmin/users.html", superadmin=current_user, users=[])
+        return f"Error loading users: {str(e)}", 500
+
+@app.route("/api/superadmin/attendance/stats")
+@login_required
+def attendance_stats():
+    """Get attendance statistics for charts"""
+    try:
+        days = int(request.args.get('days', 7))
+        
+        # Calculate date range
+        end_date = datetime.datetime.utcnow()
+        start_date = end_date - datetime.timedelta(days=days)
+        
+        # Get daily attendance data
+        pipeline = [
+            {
+                "$match": {
+                    "timestamp": {
+                        "$gte": start_date,
+                        "$lte": end_date
+                    }
+                }
+            },
+            {
+                "$group": {
+                    "_id": {
+                        "$dateToString": {
+                            "format": "%Y-%m-%d",
+                            "date": "$timestamp"
+                        }
+                    },
+                    "count": {"$sum": 1}
+                }
+            },
+            {
+                "$sort": {"_id": 1}
+            }
+        ]
+        
+        daily_attendance = list(attendance_col.aggregate(pipeline))
+        
+        # Format response
+        response_data = {
+            "daily_attendance": [
+                {
+                    "date": item["_id"],
+                    "count": item["count"]
+                }
+                for item in daily_attendance
+            ]
+        }
+        
+        return jsonify(response_data)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/api/superadmin/logs")
+@login_required 
+def system_logs():
+    """Get system logs"""
+    try:
+        limit = int(request.args.get('limit', 50))
+        
+        logs = list(system_logs_col.find({}).sort("timestamp", -1).limit(limit))
+        
+        for log in logs:
+            log["_id"] = str(log["_id"])
+            if "timestamp" in log:
+                log["timestamp"] = log["timestamp"].isoformat()
+        
+        return jsonify({"logs": logs})
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route("/superadmin/logs")
 @superadmin_required

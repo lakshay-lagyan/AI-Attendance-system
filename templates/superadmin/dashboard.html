@@ -839,6 +839,14 @@
                                         }
                                     } catch (basicError) {
                                         console.error('❌ All APIs failed:', basicError);
+                                        
+                                        // Stop detection if all APIs are down
+                                        if (faceDetectionInterval) {
+                                            clearInterval(faceDetectionInterval);
+                                            faceDetectionInterval = null;
+                                            showToast('Face detection stopped - all APIs unavailable', 'error');
+                                        }
+                                        
                                         throw new Error('All face detection APIs are unavailable');
                                     }
                                 }
@@ -945,7 +953,7 @@
                     console.error('Face detection error:', error);
                     isProcessing = false;
                 }
-            }, 1500); // Check every 1.5 seconds for real API calls
+            }, 3000); // Reduced to every 3 seconds to prevent overload
         };
 
         // Function to draw face bounding boxes on overlay canvas
@@ -1132,7 +1140,9 @@
 
         function hideFaceDetectionAlert() {
             const alert = document.getElementById('faceDetectionAlert');
-            alert.classList.add('hidden');
+            if (alert) {
+                alert.classList.add('hidden');
+            }
         }
 
         function startCameraStats() {
