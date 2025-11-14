@@ -308,6 +308,10 @@
                             <i class="fas fa-camera mr-1 sm:mr-2 text-sm"></i>
                             <span class="text-sm sm:text-base">Capture</span>
                         </button>
+                        <button id="testAPI" onclick="testDetectionAPI()" class="flex-1 sm:flex-initial bg-yellow-600 hover:bg-yellow-700 active:bg-yellow-800 text-white px-3 sm:px-4 py-2 rounded-lg transition-all duration-300 touch-manipulation">
+                            <i class="fas fa-vial mr-1 sm:mr-2 text-sm"></i>
+                            <span class="text-sm sm:text-base">Test API</span>
+                        </button>
                     </div>
                 </div>
                 
@@ -756,9 +760,24 @@
                     canvas.height = video.videoHeight;
                     ctx.drawImage(video, 0, 0);
                     
-                    // Convert to blob
+                    console.log('📹 Video dimensions:', video.videoWidth, 'x', video.videoHeight);
+                    console.log('🖼️ Canvas dimensions:', canvas.width, 'x', canvas.height);
+                    
+                    // Convert to blob with high quality
                     canvas.toBlob(async (blob) => {
                         if (isProcessing) return;
+                        
+                        // Check if blob is valid and of reasonable size
+                        if (!blob || blob.size < 1000) {
+                            console.warn('⚠️ Invalid or too small image blob:', blob?.size);
+                            return;
+                        }
+                        
+                        if (blob.size > 5 * 1024 * 1024) { // 5MB limit
+                            console.warn('⚠️ Image too large:', blob.size);
+                            return;
+                        }
+                        
                         isProcessing = true;
                         
                         try {
@@ -766,24 +785,68 @@
                             const formData = new FormData();
                             formData.append('frame', blob, 'frame.jpg');
                             
-                            // Try advanced multi-modal detection first
-                            let response = await fetch('/api/detect_face_ultra', {
-                                method: 'POST',
-                                body: formData
-                            });
+                            console.log('📸 Sending frame to detection API...', blob.size, 'bytes');
                             
-                            // Fallback to enhanced detection if ultra fails
-                            if (!response.ok) {
-                                console.log('🔄 Ultra detection failed, trying enhanced...');
-                                response = await fetch('/api/detect_face_public', {
+                            let response, result;
+                            let apiUsed = 'none';
+                            
+                            // Try multiple APIs in sequence until one works
+                            try {
+                                console.log('🚀 Trying ultra detection API...');
+                                response = await fetch('/api/detect_face_ultra', {
                                     method: 'POST',
                                     body: formData
                                 });
+                                
+                                if (response.ok) {
+                                    result = await response.json();
+                                    apiUsed = 'ultra';
+                                    console.log('✅ Ultra API success:', result);
+                                } else {
+                                    throw new Error(`Ultra API failed: ${response.status}`);
+                                }
+                            } catch (ultraError) {
+                                console.log('🔄 Ultra API failed, trying public API:', ultraError.message);
+                                
+                                try {
+                                    response = await fetch('/api/detect_face_public', {
+                                        method: 'POST',
+                                        body: formData
+                                    });
+                                    
+                                    if (response.ok) {
+                                        result = await response.json();
+                                        apiUsed = 'public';
+                                        console.log('✅ Public API success:', result);
+                                    } else {
+                                        throw new Error(`Public API failed: ${response.status}`);
+                                    }
+                                } catch (publicError) {
+                                    console.log('🔄 Public API failed, trying basic API:', publicError.message);
+                                    
+                                    try {
+                                        response = await fetch('/api/detect_face', {
+                                            method: 'POST',
+                                            body: formData
+                                        });
+                                        
+                                        if (response.ok) {
+                                            result = await response.json();
+                                            apiUsed = 'basic';
+                                            console.log('✅ Basic API success:', result);
+                                        } else {
+                                            throw new Error(`Basic API failed: ${response.status}`);
+                                        }
+                                    } catch (basicError) {
+                                        console.error('❌ All APIs failed:', basicError);
+                                        throw new Error('All face detection APIs are unavailable');
+                                    }
+                                }
                             }
                             
-                            const result = await response.json();
+                            console.log(`🎯 Using ${apiUsed} API for detection`);
                             
-                            if (result.status === 'success') {
+                            if (result && result.status === 'success') {
                                 const faceCount = result.faces_detected;
                                 document.getElementById('faceCount').textContent = `${faceCount} face${faceCount !== 1 ? 's' : ''} detected`;
                                 
@@ -836,10 +899,13 @@
                                     // Draw face bounding boxes on canvas overlay
                                     drawFaceBoundingBoxes(result.faces);
                                 } else {
-                                    document.getElementById('recognitionStatus').textContent = 'Ready for recognition';
-                                    document.getElementById('recognitionStatus').className = 'text-green-300 mt-1';
+                                    document.getElementById('recognitionStatus').textContent = 'No faces detected - point camera at face';
+                                    document.getElementById('recognitionStatus').className = 'text-blue-300 mt-1';
                                     hideFaceDetectionAlert();
                                     clearFaceBoundingBoxes();
+                                    
+                                    // Show scanning indicator
+                                    console.log('👁️ No faces detected - scanning...');
                                 }
                             } else {
                                 // API error, fall back to ready state
@@ -855,12 +921,20 @@
                             if (error.message.includes('502')) {
                                 document.getElementById('recognitionStatus').textContent = 'Server temporarily unavailable';
                                 document.getElementById('recognitionStatus').className = 'text-yellow-400 mt-0.5 sm:mt-1 text-xs sm:text-sm';
+                                showToast('Server temporarily unavailable - retrying...', 'error');
                             } else if (error.message.includes('500')) {
                                 document.getElementById('recognitionStatus').textContent = 'Server error - check system';
                                 document.getElementById('recognitionStatus').className = 'text-red-400 mt-0.5 sm:mt-1 text-xs sm:text-sm';
+                                showToast('Server error detected - check system health', 'error');
+                            } else if (error.message.includes('All face detection APIs are unavailable')) {
+                                document.getElementById('recognitionStatus').textContent = 'All APIs unavailable';
+                                document.getElementById('recognitionStatus').className = 'text-red-500 mt-0.5 sm:mt-1 text-xs sm:text-sm';
+                                showToast('All face detection APIs are down!', 'error');
                             } else {
                                 // Network or other issues - don't show persistent error to user
                                 console.warn('Network issue, continuing...');
+                                document.getElementById('recognitionStatus').textContent = 'Network issue - retrying';
+                                document.getElementById('recognitionStatus').className = 'text-orange-400 mt-0.5 sm:mt-1 text-xs sm:text-sm';
                             }
                         } finally {
                             isProcessing = false;
@@ -1290,6 +1364,69 @@
                 toast.classList.remove('show');
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
+        };
+
+        // Test Detection API Function
+        window.testDetectionAPI = async function() {
+            showToast('Testing face detection APIs...', 'info');
+            console.log('🧪 Starting API test...');
+            
+            // Create a test canvas with a simple image
+            const testCanvas = document.createElement('canvas');
+            testCanvas.width = 640;
+            testCanvas.height = 480;
+            const ctx = testCanvas.getContext('2d');
+            
+            // Draw a simple test pattern
+            ctx.fillStyle = '#333333';
+            ctx.fillRect(0, 0, testCanvas.width, testCanvas.height);
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Face Detection Test', testCanvas.width / 2, testCanvas.height / 2);
+            
+            testCanvas.toBlob(async (testBlob) => {
+                const formData = new FormData();
+                formData.append('frame', testBlob, 'test.jpg');
+                
+                console.log('📤 Test image size:', testBlob.size, 'bytes');
+                
+                // Test all APIs
+                const apis = [
+                    { name: 'Ultra', url: '/api/detect_face_ultra' },
+                    { name: 'Public', url: '/api/detect_face_public' },
+                    { name: 'Basic', url: '/api/detect_face' },
+                    { name: 'Simple', url: '/api/detect_face_simple' }
+                ];
+                
+                for (const api of apis) {
+                    try {
+                        console.log(`🧪 Testing ${api.name} API...`);
+                        const response = await fetch(api.url, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        
+                        const result = await response.json();
+                        
+                        if (response.ok) {
+                            console.log(`✅ ${api.name} API working:`, result);
+                            showToast(`${api.name} API: ${result.status} - ${result.message || 'OK'}`, 'success');
+                        } else {
+                            console.log(`❌ ${api.name} API error:`, response.status, result);
+                            showToast(`${api.name} API: Error ${response.status}`, 'error');
+                        }
+                    } catch (error) {
+                        console.log(`💥 ${api.name} API failed:`, error);
+                        showToast(`${api.name} API: Network error`, 'error');
+                    }
+                    
+                    // Wait between API calls
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
+                
+                showToast('API testing complete - check console for details', 'info');
+            }, 'image/jpeg', 0.8);
         };
 
         // Close sidebar when clicking outside on mobile
