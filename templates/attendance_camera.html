@@ -4,9 +4,43 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Attendance Camera - Face Recognition System</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <!-- Removed external CDN to fix tracking prevention issues -->
     <style>
+        /* Reset and base styles */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: system-ui, -apple-system, sans-serif; background: #f3f4f6; }
+        
+        /* Utility classes to replace Tailwind */
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .justify-center { justify-content: center; }
+        .items-center { align-items: center; }
+        .text-center { text-align: center; }
+        .bg-blue-600 { background-color: #2563eb; }
+        .bg-green-600 { background-color: #16a34a; }
+        .bg-red-600 { background-color: #dc2626; }
+        .text-white { color: white; }
+        .text-gray-800 { color: #1f2937; }
+        .text-green-300 { color: #86efac; }
+        .text-red-400 { color: #f87171; }
+        .rounded { border-radius: 0.375rem; }
+        .rounded-lg { border-radius: 0.5rem; }
+        .p-4 { padding: 1rem; }
+        .px-6 { padding-left: 1.5rem; padding-right: 1.5rem; }
+        .py-3 { padding-top: 0.75rem; padding-bottom: 0.75rem; }
+        .m-2 { margin: 0.5rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .w-full { width: 100%; }
+        .h-full { height: 100%; }
+        .shadow-lg { box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); }
+        
+        /* Icon replacements */
+        .icon-camera::before { content: "📹"; }
+        .icon-switch::before { content: "🔄"; }
+        .icon-check::before { content: "✓"; }
+        .icon-close::before { content: "✕"; }
+        
         .gradient-bg { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
         .camera-container {
             position: relative;
@@ -254,13 +288,30 @@
                     const fr = status.face_recognition;
                     const db = status.database;
                     
-                    // Start camera and face detection
-                    async function startCamera() {
-            const toggleBtn = document.getElementById('toggleCamera');
-            const switchBtn = document.getElementById('switchCamera');
-            const placeholder = document.getElementById('cameraPlaceholder');
-            const videoContainer = document.getElementById('videoContainer');
-            const liveIndicator = document.getElementById('liveIndicator');
+                    if (fr.faiss_loaded && fr.total_persons > 0) {
+                        showToast(`System Ready: ${fr.total_persons} persons in database`, 'success');
+                    } else {
+                        showToast('Warning: No face recognition data loaded', 'error');
+                    }
+                } else {
+                    showToast('System check failed', 'error');
+                }
+            } catch (error) {
+                console.error('System check error:', error);
+                showToast('Could not verify system status', 'warning');
+            }
+        }
+
+        // Global variables
+        let cameraActive = false;
+        let currentStream = null;
+        let detectionInterval = null;
+        let isProcessing = false;
+        let currentCameraIndex = 0;
+        let availableCameras = [];
+
+        // Camera toggle function
+        window.toggleCamera = async function() {
             
             if (!cameraActive) {
                 try {
@@ -325,6 +376,7 @@
             }
         }
 
+        // Start camera function
         async function startCamera() {
             try {
                 console.log('📹 Requesting camera access...');

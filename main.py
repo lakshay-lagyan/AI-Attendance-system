@@ -1437,7 +1437,7 @@ def detect_face_enhanced():
             import mediapipe as mp
             mp_face_detection = mp.solutions.face_detection
             face_detector = mp_face_detection.FaceDetection(
-                model_selection=1, min_detection_confidence=0.3  # Lower threshold for better detection
+                model_selection=1, min_detection_confidence=0.2  # Even lower threshold for better detection
             )
             print("✅ MediaPipe face detector initialized")
         except Exception as e:
@@ -1447,10 +1447,34 @@ def detect_face_enhanced():
                 "message": f"MediaPipe not available: {str(e)}"
             }), 500
         
-        # Enhance image for better detection
+        # Multiple preprocessing techniques for better detection
+        print("🔧 Applying image enhancements...")
+        
+        # 1. Basic enhancement
         enhanced = cv.bilateralFilter(image, 9, 75, 75)
+        
+        # 2. Histogram equalization for better contrast
+        gray = cv.cvtColor(enhanced, cv.COLOR_BGR2GRAY)
+        gray = cv.equalizeHist(gray)
+        enhanced = cv.cvtColor(gray, cv.COLOR_GRAY2BGR)
+        
+        # 3. Gamma correction for brightness
+        gamma = 1.2
+        enhanced = np.power(enhanced / 255.0, gamma)
+        enhanced = (enhanced * 255).astype(np.uint8)
+        
+        # 4. Convert to RGB for MediaPipe
         rgb_image = cv.cvtColor(enhanced, cv.COLOR_BGR2RGB)
+        print(f"📊 Processing RGB image: {rgb_image.shape}")
+        
+        # 5. Try detection on original and enhanced images
         results = face_detector.process(rgb_image)
+        
+        # If no detection, try original image
+        if not results.detections:
+            print("🔄 No faces in enhanced image, trying original...")
+            rgb_original = cv.cvtColor(image, cv.COLOR_BGR2RGB)
+            results = face_detector.process(rgb_original)
         
         final_results = []
         
